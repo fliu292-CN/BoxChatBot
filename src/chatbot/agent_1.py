@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from dotenv import load_dotenv
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.tools import tool
@@ -57,23 +58,26 @@ def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tupl
 
 # --- 模块 1.2: 核心业务操作 ---
 
-# 将每个表的CREATE语句分开存储，便于动态选择
-# 为了简洁，这里只展示了结构。在您的实际代码中，请填入完整的、详细的CREATE TABLE语句。
-ALL_SCHEMAS = {
-    # 协访数据记录
-    "coachings": "CREATE TABLE `coachings` ( `id` INT, `record_type_id` VARCHAR(36), `state` VARCHAR(36), `coaching_rep_id` INT, `coaching_manager_id` INT, `created_date` DATETIME, `another_field` VARCHAR(255) );",
-    # 对象记录类型
-    "object_record_types": "CREATE TABLE `object_record_types` ( `id` VARCHAR(36), `name` VARCHAR(255), `label` VARCHAR(255) );",
-    # Picklist值
-    "picklist_values": "CREATE TABLE `picklist_values` ( `id` VARCHAR(36), `label` VARCHAR(255), `related_field` VARCHAR(255) );",
-    # 用户信息
-    "users": "CREATE TABLE `users` ( `id` INT, `name` VARCHAR(255), `email` VARCHAR(255), `region` VARCHAR(100) );",
-    # 对象状态
-    "object_states": "CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );",
-    # custom setting 自定义设置
-    "custom_settings": "CREATE TABLE `custom_settings` ( `id` VARCHAR(36), `deleted` INT, `created_on` DATETIME, `key` VARCHAR(255), `value` MEDIUMTEXT, `created_by` INT, `position_id` INT, `description` VARCHAR(5120), `type` VARCHAR(255), `module_id` VARCHAR(255), `source` ENUM('system','custom'), `group` VARCHAR(255) );"
+def _load_all_schemas(file_path: str = "schemas.json") -> dict:
+    """
+    (内部辅助函数) 从指定的JSON文件中加载所有表结构。
+    这允许我们将Schema定义与主应用程序代码分离。
+    """
+    print(f"📄 正在从 {file_path} 加载表结构...")
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            schemas = json.load(f)
+            print(f"✅ 成功加载 {len(schemas)} 个表结构。")
+            return schemas
+    except FileNotFoundError:
+        print(f"❌ 错误: Schema文件 '{file_path}' 未找到。")
+        return {}
+    except json.JSONDecodeError:
+        print(f"❌ 错误: Schema文件 '{file_path}' 不是一个有效的JSON格式。")
+        return {}
 
-}
+# 在全局范围加载一次，以便所有函数都可以使用它
+ALL_SCHEMAS = _load_all_schemas()
 
 def _select_relevant_tables(natural_language_query: str) -> list[str]:
     """
