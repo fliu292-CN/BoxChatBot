@@ -11,8 +11,8 @@ from playwright.sync_api import (Browser, BrowserContext, Locator, Page,
 
 # --- 步骤 1: 定义独立的逻辑模块 ---
 
-# --- 模块 1.1: 浏览器和认证 ---
-
+# --- 模块 1.1: 浏览器和认证 (No changes needed) ---
+# ... (The entire _login_and_get_app_page function remains unchanged) ...
 def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tuple[Page, BrowserContext, Browser]:
     """
     (内部辅助函数) 封装了完整的Web登录流程，包括处理MFA（多因素认证），
@@ -53,31 +53,94 @@ def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tupl
     app_page.wait_for_load_state("networkidle", timeout=60000)
     print("✅ 应用页面已完全加载。")
 
-    # test commit
     return app_page, context, browser
 
 # --- 模块 1.2: 核心业务操作 ---
 
+# 将每个表的CREATE语句分开存储，便于动态选择
+# 为了简洁，这里只展示了结构。在您的实际代码中，请填入完整的、详细的CREATE TABLE语句。
+ALL_SCHEMAS = {
+    # 协访数据记录
+    "coachings": "CREATE TABLE `coachings` ( `id` INT, `record_type_id` VARCHAR(36), `state` VARCHAR(36), `coaching_rep_id` INT, `coaching_manager_id` INT, `created_date` DATETIME, `another_field` VARCHAR(255) );",
+    # 对象记录类型
+    "object_record_types": "CREATE TABLE `object_record_types` ( `id` VARCHAR(36), `name` VARCHAR(255), `label` VARCHAR(255) );",
+    # Picklist值
+    "picklist_values": "CREATE TABLE `picklist_values` ( `id` VARCHAR(36), `label` VARCHAR(255), `related_field` VARCHAR(255) );",
+    # 用户信息
+    "users": "CREATE TABLE `users` ( `id` INT, `name` VARCHAR(255), `email` VARCHAR(255), `region` VARCHAR(100) );",
+    # 对象状态
+    "object_states": "CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );",
+    # custom setting 自定义设置
+    "custom_settings": "CREATE TABLE `custom_settings` ( `id` VARCHAR(36), `deleted` INT, `created_on` DATETIME, `key` VARCHAR(255), `value` MEDIUMTEXT, `created_by` INT, `position_id` INT, `description` VARCHAR(5120), `type` VARCHAR(255), `module_id` VARCHAR(255), `source` ENUM('system','custom'), `group` VARCHAR(255) );"
+
+}
+
+def _select_relevant_tables(natural_language_query: str) -> list[str]:
+    """
+    (内部辅助函数) 使用LLM根据自然语言问题，从所有可用表中选择相关的表。
+    这是一个预处理步骤，用于减少主SQL生成提示的大小。
+    """
+    print("🤖 正在进行第一步: 选择相关表...")
+
+    table_selection_prompt = ChatPromptTemplate.from_messages([
+        ("system", f"""
+# 角色和目标
+你是一个高效的数据库架构师。你的任务是分析一个自然语言问题，并从可用表列表中确定哪些表是回答该问题所必需的。
+
+# 可用表
+{', '.join(ALL_SCHEMAS.keys())}
+
+# 指示
+1. 阅读用户的问题。
+2. 识别问题中提到的关键实体（如 "coaching records", "users", "record types"）。
+3. 将这些实体映射到上面列出的最相关的表名。
+4. 仅返回一个由逗号分隔的所需表名的列表。不要包含任何其他文本、解释或代码块。
+
+# 示例
+用户问题: "Find all coaching records for the user 'John Doe'."
+你的回答: coachings,users
+"""),
+        ("user", "{query}")
+    ])
+
+    # 使用一个快速且成本效益高的模型进行此分类任务
+    table_selection_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
+    chain = table_selection_prompt | table_selection_llm | StrOutputParser()
+
+    response = chain.invoke({"query": natural_language_query})
+    selected_tables = [table.strip() for table in response.split(',') if table.strip() in ALL_SCHEMAS]
+
+    if not selected_tables:
+        print("⚠️ 未能识别出任何相关表，将默认使用所有表。")
+        return list(ALL_SCHEMAS.keys())
+
+    print(f"✅ 第一步完成. 选择的表: {selected_tables}")
+    return selected_tables
+
+
 def generate_sql_query(natural_language_query: str) -> str:
     """
-    (内部函数) 根据用户提供的自然语言问题和预定义的数据库结构，生成精确的SQL查询语句。
+    (内部函数) 根据用户提供的自然语言问题，动态选择相关表结构，然后生成精确的SQL查询语句。
     """
-    print(f"🤖 调用内部SQL生成函数，自然语言问题: '{natural_language_query}'")
+    print(f"🤖 调用SQL生成流程，自然语言问题: '{natural_language_query}'")
 
+    # 步骤 1: 动态选择相关的表
+    relevant_tables = _select_relevant_tables(natural_language_query)
+
+    # 步骤 2: 根据选择的表构建动态的Schema提示
+    dynamic_schema_prompt_part = "\n".join([ALL_SCHEMAS[table] for table in relevant_tables])
+    print(f"📋 正在为SQL生成构建动态Schema:\n---\n{dynamic_schema_prompt_part}\n---")
+
+
+    # 步骤 3: 使用动态Schema生成SQL
     sql_generation_prompt = ChatPromptTemplate.from_messages([
         ("system", """
 # 角色和目标
-你是一名顶级的SQL数据库专家。你的任务是根据我提供的数据库表结构，将我的自然语言问题精准地翻译成可以直接执行的SQL查询语句。
+你是一名顶级的SQL数据库专家。你的任务是根据我提供的【相关】数据库表结构，将我的自然语言问题精准地翻译成可以直接执行的SQL查询语句。
 
 # 数据库表结构 (Schema)
-```sql
-CREATE TABLE `coachings` ( `id` INT, `record_type_id` VARCHAR(36), `state` VARCHAR(36), `coaching_rep_id` INT, `coaching_manager_id` INT, ... );
-CREATE TABLE `object_record_types` ( `id` VARCHAR(36), `name` VARCHAR(255), `label` VARCHAR(255) );
-CREATE TABLE `picklist_values` ( `id` VARCHAR(36), `label` VARCHAR(255) );
-CREATE TABLE `users` ( `id` INT, `name` VARCHAR(255) );
-CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );
-```
-(为简洁起见，此处省略了完整的CREATE TABLE语句，但实际逻辑中包含所有细节)
+-- 注意: 这里只提供了与用户问题最相关的表 --
+{schema}
 
 # 指示
 1.  严格使用上面定义的表名和列名。
@@ -90,7 +153,12 @@ CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );
 
     sql_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
     chain = sql_generation_prompt | sql_llm | StrOutputParser()
-    generated_sql = chain.invoke({"query": natural_language_query})
+
+    # 将动态Schema和用户问题一起传入
+    generated_sql = chain.invoke({
+        "schema": dynamic_schema_prompt_part,
+        "query": natural_language_query
+    })
 
     cleaned_sql = re.sub(r"```sql\n|```", "", generated_sql).strip()
 
@@ -191,8 +259,7 @@ def _find_and_get_status(page: Page, jira_ticket: str) -> str:
     return f"✅ 查询成功！Jira 工单 {jira_ticket} 的当前审批状态是: {status}"
 
 
-# --- 模块 1.3: 浏览器操作协调器 (重构) ---
-
+# --- 模块 1.3: 浏览器操作协调器 (重构) (No changes needed) ---
 def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     """
     (内部协调器) 管理整个浏览器操作生命周期。
@@ -229,14 +296,16 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     except Exception as e:
         error_message = f"😭 操作过程中发生严重错误: {e}"
         print(error_message)
+        # For debugging, it's helpful to see the full traceback
+        import traceback
+        traceback.print_exc()
         return error_message
 
     print("\n✅ 浏览器操作流程执行完毕。")
     return result
 
-
-# --- 步骤 2: 定义 LangChain 工具 ---
-
+# --- 步骤 2: 定义 LangChain 工具 (No changes needed) ---
+# ... (The tool definitions for process_data_request and check_jira_status remain unchanged) ...
 @tool
 def process_data_request(jira_ticket: str, approver: str, data_query_description: str) -> str:
     """
@@ -273,7 +342,6 @@ def process_data_request(jira_ticket: str, approver: str, data_query_description
 
     return result
 
-# --- 新工具 ---
 @tool
 def check_jira_status(jira_ticket: str) -> str:
     """
@@ -294,9 +362,8 @@ def check_jira_status(jira_ticket: str) -> str:
 
     return result
 
-
-# --- 步骤 3: 设置并运行 Agent ---
-
+# --- 步骤 3: 设置并运行 Agent (No changes needed) ---
+# ... (The main function remains unchanged) ...
 def main():
     """主执行函数，以交互式聊天机器人模式运行。"""
     load_dotenv()
