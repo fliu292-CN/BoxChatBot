@@ -53,6 +53,7 @@ def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tupl
     app_page.wait_for_load_state("networkidle", timeout=60000)
     print("✅ 应用页面已完全加载。")
 
+    # test commit
     return app_page, context, browser
 
 # --- 模块 1.2: 核心业务操作 ---
@@ -62,7 +63,7 @@ def generate_sql_query(natural_language_query: str) -> str:
     (内部函数) 根据用户提供的自然语言问题和预定义的数据库结构，生成精确的SQL查询语句。
     """
     print(f"🤖 调用内部SQL生成函数，自然语言问题: '{natural_language_query}'")
-    
+
     sql_generation_prompt = ChatPromptTemplate.from_messages([
         ("system", """
 # 角色和目标
@@ -86,7 +87,7 @@ CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );
 """),
         ("user", "{query}")
     ])
-    
+
     sql_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
     chain = sql_generation_prompt | sql_llm | StrOutputParser()
     generated_sql = chain.invoke({"query": natural_language_query})
@@ -96,7 +97,7 @@ CREATE TABLE `object_states` ( `id` VARCHAR(36), `label` VARCHAR(255) );
     if "SELECT" not in cleaned_sql.upper():
          print(f"❌ SQL生成失败，返回的不是有效的查询语句。")
          return f"Error: Failed to generate a valid SQL query. LLM returned: {cleaned_sql}"
-    
+
     print(f"✅ 内部SQL生成成功:\n---\n{cleaned_sql}\n---")
     return cleaned_sql
 
@@ -112,10 +113,10 @@ def fill_form_and_submit(
 
     dialog_locator: Locator = page.locator('div[role="dialog"]').first
     expect(dialog_locator).to_be_visible(timeout=10000)
-    
+
     dialog_locator.get_by_text("全选prod", exact=True).click()
     dialog_locator.get_by_role("button", name="Confirm").click()
-    
+
     print("📝 表单页面已加载，开始填写详细信息...")
 
     approver_input_locator = page.locator(".el-form-item:has-text('评审人')").locator("input.el-select__input")
@@ -132,13 +133,13 @@ def fill_form_and_submit(
 
     page.get_by_label("SQL内容").fill(sql_query)
     print("✅ SQL 内容已填写。")
-    
+
     print("\n" + "="*50)
     print("✋ 表单已填写完毕，等待人工审核！")
     print("   请检查浏览器窗口中的表单内容是否正确。")
-    
+
     confirmation = input("   确认无误并提交申请吗？请输入 'yes' 或 'y' 继续: ")
-    
+
     if confirmation.lower() in ['yes', 'y']:
         print("✅ 用户确认提交，正在点击提交按钮...")
         submit_button = page.get_by_role("button", name="提交")
@@ -160,7 +161,7 @@ def _find_and_get_status(page: Page, jira_ticket: str) -> str:
     查找指定的Jira工单并返回其审批状态。
     """
     print("\n🔍 开始查询审批状态...")
-    
+
     # 假设通过点击名为“我提交的”的菜单项来导航
     print("➡️  正在导航至'我提交的'页面...")
     page.get_by_role("menuitem", name="我提交的").click()
@@ -168,11 +169,11 @@ def _find_and_get_status(page: Page, jira_ticket: str) -> str:
     print("✅ 已进入'我提交的'页面。")
 
     print(f"📄 正在搜索 Jira 工单: {jira_ticket}...")
-    
+
     # 在表格中定位包含特定Jira工单号的行
     # 这是一个健壮的选择器，可以找到包含该文本的 <tr> 元素
     row_locator = page.locator(f"tr:has-text('{re.escape(jira_ticket)}')").first
-    
+
     try:
         expect(row_locator).to_be_visible(timeout=15000)
         print(f"✅ 已在页面上找到工单 {jira_ticket} 所在的行。")
@@ -184,9 +185,9 @@ def _find_and_get_status(page: Page, jira_ticket: str) -> str:
     # 假设状态在第五列 (td)。请根据实际页面结构调整索引（0-based）。
     status_locator = row_locator.locator("td").nth(4)
     status = status_locator.inner_text()
-    
+
     print(f"ℹ️  提取到的状态为: '{status}'")
-    
+
     return f"✅ 查询成功！Jira 工单 {jira_ticket} 的当前审批状态是: {status}"
 
 
@@ -216,10 +217,10 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
             browser = None
             try:
                 app_page, _, browser = _login_and_get_app_page(p, username, password)
-                
+
                 # 执行传入的具体操作，并将页面对象和其他参数传递进去
                 result = action_callable(page=app_page, **action_kwargs)
-                
+
             finally:
                 if browser and browser.is_connected():
                     print("🚪 正在关闭浏览器...")
@@ -254,13 +255,13 @@ def process_data_request(jira_ticket: str, approver: str, data_query_description
     sql_query = generate_sql_query(data_query_description)
     if "Error:" in sql_query:
         return f"处理失败：无法生成SQL查询。内部错误: {sql_query}"
-    
+
     print("\n[步骤 2/3] 正在准备表单数据...")
     reason = f"为Jira工单 {jira_ticket} 查询数据"
     print(f"  - 申请原因已生成: '{reason}'")
 
     print("\n[步骤 3/3] 正在执行浏览器操作 (登录和表单填写)...")
-    
+
     # 使用重构后的协调器来执行操作
     result = _perform_browser_action(
         fill_form_and_submit,
@@ -269,7 +270,7 @@ def process_data_request(jira_ticket: str, approver: str, data_query_description
         reason=reason,
         sql_query=sql_query
     )
-    
+
     return result
 
 # --- 新工具 ---
@@ -284,13 +285,13 @@ def check_jira_status(jira_ticket: str) -> str:
         jira_ticket (str): 要查询状态的Jira工单号。
     """
     print(f"🚀 开始执行Jira工单状态【查询】流程，工单号: {jira_ticket}...")
-    
+
     # 使用重构后的协调器来执行查询操作
     result = _perform_browser_action(
         _find_and_get_status,
         jira_ticket=jira_ticket
     )
-    
+
     return result
 
 
@@ -300,10 +301,10 @@ def main():
     """主执行函数，以交互式聊天机器人模式运行。"""
     load_dotenv()
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, model_kwargs={"response_mime_type": "application/json"})
-    
+
     # 将新工具添加到工具列表中
     tools = [process_data_request, check_jira_status]
-    
+
     # 更新系统提示，让Agent了解新工具的能力
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -321,10 +322,10 @@ def main():
 
     print("👋 你好！我是你的数据查询助手。")
     print("="*60)
-    
+
     # 更新引导示例，包含新功能
     example = """例如，你可以这样告诉我:
-    
+
 --- 提交新申请 ---
 '你好，请帮我处理一个数据查询申请。
  工单号是 ORI-120470。
@@ -363,7 +364,7 @@ def main():
             print(result['output'])
         except Exception as e:
             print(f"❌ 执行过程中出现错误: {e}")
-        
+
         print("\n" + "="*60)
         print("我可以为你处理下一个请求。")
 
