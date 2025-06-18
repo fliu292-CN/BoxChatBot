@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import requests
+from urllib.parse import urljoin 
 from dotenv import load_dotenv
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.tools import tool
@@ -12,8 +14,7 @@ from playwright.sync_api import (Browser, BrowserContext, Locator, Page,
 
 # --- 步骤 1: 定义独立的逻辑模块 ---
 
-# --- 模块 1.1: 浏览器和认证 (No changes needed) ---
-# ... (The entire _login_and_get_app_page function remains unchanged) ...
+# --- 模块 1.1: 浏览器和认证 (无改动) ---
 def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tuple[Page, BrowserContext, Browser]:
     """
     (内部辅助函数) 封装了完整的Web登录流程，包括处理MFA（多因素认证），
@@ -63,17 +64,20 @@ def _load_all_schemas(file_path: str = "schemas.json") -> dict:
     (内部辅助函数) 从指定的JSON文件中加载所有表结构。
     这允许我们将Schema定义与主应用程序代码分离。
     """
-    print(f"📄 正在从 {file_path} 加载表结构...")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    absolute_file_path = os.path.join(script_dir, file_path)
+    
+    print(f"📄 正在从 {absolute_file_path} 加载表结构...")
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(absolute_file_path, 'r', encoding='utf-8') as f:
             schemas = json.load(f)
             print(f"✅ 成功加载 {len(schemas)} 个表结构。")
             return schemas
     except FileNotFoundError:
-        print(f"❌ 错误: Schema文件 '{file_path}' 未找到。")
+        print(f"❌ 错误: Schema文件 '{absolute_file_path}' 未找到。请确保 'schemas.json' 与您的主脚本位于同一目录下。")
         return {}
     except json.JSONDecodeError:
-        print(f"❌ 错误: Schema文件 '{file_path}' 不是一个有效的JSON格式。")
+        print(f"❌ 错误: Schema文件 '{absolute_file_path}' 不是一个有效的JSON格式。")
         return {}
 
 # 在全局范围加载一次，以便所有函数都可以使用它
@@ -175,10 +179,11 @@ def generate_sql_query(natural_language_query: str) -> str:
 
 
 def fill_form_and_submit(
-    page: Page, approver: str, jira_ticket: str, reason: str, sql_query: str
+    page: Page, approver: str, jira_ticket: str, reason: str, sql_query: str, **kwargs
 ) -> str:
     """
     (内部函数) 在已登录的应用页面上，找到、填写并提交数据查询表单。
+    **kwargs用于接收来自协调器的额外参数（如context），以保持签名兼容性。
     """
     print("\n🔍 开始在应用页面上执行表单填写操作...")
     page.get_by_role("button", name="批量读取").click()
@@ -226,54 +231,180 @@ def fill_form_and_submit(
     return return_message
 
 
-# --- 新功能 ---
-def _find_and_get_status(page: Page, jira_ticket: str) -> str:
+# --- 新增的下载辅助函数 ---
+def download_file_from_veeva(url: str, headers: dict, output_filename: str):
     """
-    (内部函数) 在已登录的应用页面上，导航到“我提交的”列表，
-    查找指定的Jira工单并返回其审批状态。
+    使用requests库下载文件。
     """
-    print("\n🔍 开始查询审批状态...")
-
-    # 假设通过点击名为“我提交的”的菜单项来导航
-    print("➡️  正在导航至'我提交的'页面...")
-    page.get_by_role("menuitem", name="我提交的").click()
-    page.wait_for_load_state("networkidle", timeout=30000)
-    print("✅ 已进入'我提交的'页面。")
-
-    print(f"📄 正在搜索 Jira 工单: {jira_ticket}...")
-
-    # 在表格中定位包含特定Jira工单号的行
-    # 这是一个健壮的选择器，可以找到包含该文本的 <tr> 元素
-    row_locator = page.locator(f"tr:has-text('{re.escape(jira_ticket)}')").first
-
+    print(f"\n--- 正在使用 Requests 库直接下载文件：{url} ---")
     try:
-        expect(row_locator).to_be_visible(timeout=15000)
-        print(f"✅ 已在页面上找到工单 {jira_ticket} 所在的行。")
-    except Exception:
-        error_msg = f"❌ 未能找到 Jira 工单 {jira_ticket}。请确认工单号是否正确或是否已提交。"
+        response = requests.get(url, headers=headers, stream=True, allow_redirects=True, timeout=120)
+        response.raise_for_status()
+
+        # 尝试从响应头中获取服务器建议的文件名
+        suggested_filename = output_filename
+        if 'Content-Disposition' in response.headers:
+            content_disposition = response.headers['Content-Disposition']
+            filename_match = re.search(r'filename\*?=(?:UTF-8\'\')?\"?([^\";]+)\"?', content_disposition)
+            if filename_match:
+                suggested_filename_raw = filename_match.group(1).strip()
+                try:
+                    suggested_filename = requests.utils.unquote(suggested_filename_raw)
+                except Exception:
+                    suggested_filename = suggested_filename_raw
+
+        if suggested_filename and suggested_filename != output_filename:
+            output_filename = suggested_filename
+            print(f"ℹ️  根据服务器建议，文件将保存为: {output_filename}")
+        else:
+            print(f"ℹ️  文件将保存为默认名: {output_filename}")
+
+        with open(output_filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        print(f"✅ 文件 '{output_filename}' 下载成功！")
+        return f"文件 '{output_filename}' 已成功下载到本地。"
+
+    except requests.exceptions.RequestException as e:
+        error_msg = f"❌ 文件下载失败: {e}"
         print(error_msg)
         return error_msg
 
-    # 假设状态在第五列 (td)。请根据实际页面结构调整索引（0-based）。
-    status_locator = row_locator.locator("td").nth(4)
-    status = status_locator.inner_text()
 
-    print(f"ℹ️  提取到的状态为: '{status}'")
+# ---寻找对应jira号的申请，查看状态，如果已执行则下载 ---
+def _find_status_and_download_if_ready(page: Page, context: BrowserContext, jira_ticket: str, **kwargs) -> str:
+    """
+    (内部函数) 在“操作记录”页面整合了状态检查和文件下载的完整流程。
+    1. 导航到“操作记录”列表。
+    2. 查找指定的Jira工单卡片，并检查其“申请状态”和“执行状态”。
+    3. 如果“申请状态”为 'executed' 且“执行状态”为 'success'，则点击详情按钮并下载文件。
+    4. 如果不满足下载条件，则仅返回当前状态。
+    """
+    print("\n🔍 开始查询审批状态与执行下载流程...")
 
-    return f"✅ 查询成功！Jira 工单 {jira_ticket} 的当前审批状态是: {status}"
+    print("➡️  [步骤 1/1] 正在导航至'操作记录'页面进行查找、状态检查和下载...")
+    try:
+        page.locator("li.el-menu-item", has_text="操作记录").click()
+        page.wait_for_load_state('networkidle', timeout=60000)
+        print(f"✅ 已导航到操作记录页面: {page.url}")
+    except Exception as e:
+        error_msg = f"❌ 导航到'操作记录'页面失败: {e}."
+        print(error_msg)
+        return error_msg
+
+    print(f"📄 正在操作记录中定位 Jira: {jira_ticket}...")
+    
+    # 定位包含Jira ID的卡片容器
+    item_container_base_selector = 'div.el-card.is-always-shadow.custom-card'
+    specific_item_container_locator = page.locator(item_container_base_selector).filter(
+        has=page.locator(f'span.el-text.custom-text:has-text("相关Jira: {jira_ticket}")')
+    )
+    
+    try:
+        specific_item_container_locator.first.wait_for(state='visible', timeout=30000)
+        print(f"✅ 已找到包含 '{jira_ticket}' 的记录卡片。")
+    except Exception:
+        error_msg = f"❌ 未能找到 Jira 工单 {jira_ticket} 对应的卡片。请确认工单号是否正确或申请是否已在'操作记录'中。"
+        print(error_msg)
+        return error_msg
+
+    # 在卡片内同时查找“申请状态”和“执行状态”
+    try:
+        # 定位“申请状态”
+        application_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("申请状态:")')
+        full_app_status_text = application_status_locator.inner_text().strip()
+        application_status = full_app_status_text.split(':')[1].strip()
+        print(f"ℹ️  提取到的申请状态为: '{application_status}'")
+
+        # 定位“执行状态”
+        execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")')
+        full_exec_status_text = execution_status_locator.inner_text().strip()
+        execution_status = full_exec_status_text.split(':')[1].strip()
+        print(f"ℹ️  提取到的执行状态为: '{execution_status}'")
+
+    except Exception as e:
+        # 如果任一状态找不到或解析失败，提供一个回退消息
+        print(f"❗️ 解析状态时出错: {e}")
+        return f"✅ 找到了Jira工单 {jira_ticket} 的卡片，但无法确定其完整状态。请在浏览器中手动检查。"
+
+    # 检查下载条件：申请状态为executed且执行状态为success
+    if "executed" in application_status.lower() and "success" in execution_status.lower():
+        print(f"✅ 条件满足 (申请状态: {application_status}, 执行状态: {execution_status})。继续执行下载流程...")
+    else:
+        return f"✅ 查询成功！Jira 工单 {jira_ticket} 的申请状态是: '{application_status}', 执行状态是: '{execution_status}' (不满足下载条件)。"
+
+    # 在卡片内定位详情/下载按钮
+    detail_icon_button_selector = 'button.el-button.is-circle.el-tooltip__trigger'
+    
+    try:
+        detail_button_locator = specific_item_container_locator.locator(detail_icon_button_selector)
+        detail_button_locator.first.wait_for(state='visible', timeout=30000)
+        print("✅ 已找到卡片内的详情图标按钮。")
+
+        # 导航在同一页面发生
+        detail_button_locator.first.click(timeout=30000)
+        print("🖱️  已点击详情图标按钮，等待详情页内容加载...")
+        
+        # 等待详情页的标志性元素出现
+        detail_page_header_locator = page.locator('b.el-text--large:has-text("操作申请详情页")')
+        detail_page_header_locator.wait_for(state='visible', timeout=60000)
+        print(f"✅ 已在同一页面加载详情内容。URL: {page.url}")
+
+        # 直接从页面中找到下载链接并提取href
+        download_link_locator = page.locator('a.el-link:has-text("点击下载到Excel")')
+        download_link_locator.wait_for(state='visible', timeout=10000)
+        
+        relative_download_url = download_link_locator.get_attribute('href')
+        if not relative_download_url:
+            return "❌ 找到了下载链接，但无法获取其地址(href)。"
+            
+        # 使用当前页面URL构建完整的下载URL
+        base_url = page.url
+        download_api_url = urljoin(base_url, relative_download_url)
+        
+        print(f"✅ 成功提取到下载链接: {download_api_url}")
+        
+        # 提取下载所需认证信息
+        cookies_list = context.cookies()
+        cookie_string = "; ".join([f"{c['name']}={c['value']}" for c in cookies_list])
+        user_agent = page.evaluate('navigator.userAgent')
+
+        auth_headers = {
+            'User-Agent': user_agent,
+            'Cookie': cookie_string,
+        }
+        print("✅ 成功捕获下载所需的会话认证信息。")
+        
+        # 提取Jira号用于文件名
+        jira_match = re.search(r"ORI-\d+", jira_ticket)
+        file_jira_id = jira_match.group(0) if jira_match else jira_ticket
+
+        # 构建下载URL并执行下载
+        download_result = download_file_from_veeva(
+            download_api_url, 
+            auth_headers, 
+            f'Veeva_Report_{file_jira_id}.xlsx'
+        )
+        return f"🎉 操作完成！Jira 工单 {jira_ticket} 的申请状态为 {application_status}，执行状态为 {execution_status}。{download_result}"
+
+    except Exception as e:
+        error_message = f"❌ 在点击详情或下载过程中发生错误: {e}"
+        print(error_message)
+        import traceback
+        traceback.print_exc()
+        # 调试时可以取消注释以下行来保存截图
+        # page.screenshot(path=f"playwright_download_error_{jira_ticket}.png")
+        # print(f"已保存错误截图 playwright_download_error_{jira_ticket}.png")
+        return error_message
 
 
-# --- 模块 1.3: 浏览器操作协调器 (重构) (No changes needed) ---
+# --- 模块 1.3: 浏览器操作协调器 (已修改以传递context) ---
 def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     """
     (内部协调器) 管理整个浏览器操作生命周期。
     它负责：加载凭据、启动Playwright、登录、执行指定的操作函数、最后关闭浏览器。
-    这避免了在每个工具中重复相同的设置和清理代码。
-
-    参数:
-        action_callable (callable): 要在登录后的页面上执行的函数。
-                                    (例如: `fill_form_and_submit` 或 `_find_and_get_status`)
-        **action_kwargs: 传递给 action_callable 的关键字参数。
+    此版本已更新，会将 `context` 对象传递给 `action_callable`。
     """
     username = os.getenv("VEEVA_USERNAME")
     password = os.getenv("VEEVA_PASSWORD")
@@ -283,24 +414,31 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     print("🔑 凭据加载成功。")
 
     result = ""
+    browser = None # 确保 browser 在 try 块外被定义
     try:
         with sync_playwright() as p:
-            browser = None
             try:
-                app_page, _, browser = _login_and_get_app_page(p, username, password)
+                app_page, context, browser = _login_and_get_app_page(p, username, password)
 
-                # 执行传入的具体操作，并将页面对象和其他参数传递进去
-                result = action_callable(page=app_page, **action_kwargs)
+                # 执行传入的具体操作，并将页面和上下文对象以及其他参数传递进去
+                result = action_callable(page=app_page, context=context, **action_kwargs)
 
+            except Exception as e:
+                # 捕获在 action_callable 中发生的异常
+                error_message = f"😭 操作执行过程中发生严重错误: {e}"
+                print(error_message)
+                import traceback
+                traceback.print_exc()
+                return error_message
             finally:
                 if browser and browser.is_connected():
                     print("🚪 正在关闭浏览器...")
                     browser.close()
                     print("✅ 浏览器已关闭。")
     except Exception as e:
-        error_message = f"😭 操作过程中发生严重错误: {e}"
+        # 捕获 Playwright 启动或登录过程中的异常
+        error_message = f"😭 浏览器生命周期管理中发生严重错误: {e}"
         print(error_message)
-        # For debugging, it's helpful to see the full traceback
         import traceback
         traceback.print_exc()
         return error_message
@@ -308,8 +446,8 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     print("\n✅ 浏览器操作流程执行完毕。")
     return result
 
-# --- 步骤 2: 定义 LangChain 工具 (No changes needed) ---
-# ... (The tool definitions for process_data_request and check_jira_status remain unchanged) ...
+
+# --- 步骤 2: 定义 LangChain 工具 (check_jira_status的描述已更新) ---
 @tool
 def process_data_request(jira_ticket: str, approver: str, data_query_description: str) -> str:
     """
@@ -343,31 +481,29 @@ def process_data_request(jira_ticket: str, approver: str, data_query_description
         reason=reason,
         sql_query=sql_query
     )
-
     return result
 
 @tool
 def check_jira_status(jira_ticket: str) -> str:
     """
     当你需要【查询】一个已经提交的Jira工单的【审批状态】时，使用此工具。
-    这个工具只会【查找和返回状态】，不会提交任何新内容。
+    这个工具会查找工单并返回其状态。如果工单状态为“已执行”，此工具会【自动尝试下载】结果文件。
     只需要提供Jira工单号。
 
     参数:
         jira_ticket (str): 要查询状态的Jira工单号。
     """
-    print(f"🚀 开始执行Jira工单状态【查询】流程，工单号: {jira_ticket}...")
+    print(f"🚀 开始执行Jira工单状态【查询和下载】流程，工单号: {jira_ticket}...")
 
-    # 使用重构后的协调器来执行查询操作
+    # 使用重构后的协调器来执行查询和下载操作
     result = _perform_browser_action(
-        _find_and_get_status,
+        _find_status_and_download_if_ready,
         jira_ticket=jira_ticket
     )
-
     return result
 
-# --- 步骤 3: 设置并运行 Agent (No changes needed) ---
-# ... (The main function remains unchanged) ...
+
+# --- 步骤 3: 设置并运行 Agent (无改动) ---
 def main():
     """主执行函数，以交互式聊天机器人模式运行。"""
     load_dotenv()
@@ -381,7 +517,7 @@ def main():
         [
             ("system", """你是一个高效的助理。你的任务是根据用户的请求调用合适的工具。
 - 如果用户想要【提交一个新的数据查询申请】，你应该从用户输入中提取 `jira_ticket`, `approver`, 和 `data_query_description`，然后调用 `process_data_request` 工具。
-- 如果用户想要【查询一个已存在工单的审批状态】，你应该从用户输入中提取 `jira_ticket`，然后调用 `check_jira_status` 工具。
+- 如果用户想要【查询一个已存在工单的审批状态】，你应该从用户输入中提取 `jira_ticket`，然后调用 `check_jira_status` 工具。此工具在工单执行完毕后会自动下载文件。
 - 准确地识别用户的意图是提交新请求还是查询旧请求。"""),
             ("user", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
@@ -403,8 +539,8 @@ def main():
  我需要查询所有记录类型为“会议随访”的协访记录。
  这个申请需要 lucy.jin 来审批。'
 
---- 查询审批状态 ---
-'嘿，帮我查一下 ORI-120470 这个单子的审批状态怎么样了？'
+--- 查询审批状态 (如果已执行会自动下载) ---
+'嘿，帮我查一下 ORI-120624 这个单子的审批状态怎么样了？'
 """
     print(example)
     print("="*60)
