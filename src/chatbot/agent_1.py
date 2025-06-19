@@ -187,9 +187,9 @@ def _select_relevant_tables(natural_language_query: str) -> list[str]:
 """),
         ("user", "{query}")
     ])
+
     table_selection_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0,
-                                                 google_api_key=os.getenv("GOOGLE_API_KEY")
-)
+                                                 google_api_key=os.getenv("GOOGLE_API_KEY"))
     chain = table_selection_prompt | table_selection_llm | StrOutputParser()
     response = chain.invoke({"query": natural_language_query})
     selected_tables = [table.strip() for table in response.split(',') if table.strip() in ALL_SCHEMAS]
@@ -208,24 +208,49 @@ def generate_sql_query(natural_language_query: str) -> str:
     dynamic_schema_prompt_part = "\n".join([ALL_SCHEMAS[table] for table in relevant_tables])
     print(f"📋 正在为SQL生成构建动态Schema:\n---\n{dynamic_schema_prompt_part}\n---")
 
+    # --- Start of Updated Prompt ---
     sql_generation_prompt = ChatPromptTemplate.from_messages([
-        ("system", """
-# 角色和目标
-你是一名顶级的SQL数据库专家。你的任务是根据我提供的【相关】数据库表结构，将我的自然语言问题精准地翻译成可以直接执行的SQL查询语句。
+        ("system", """# 角色和目标
+你是一名顶级的SQL数据库专家。你的核心任务是根据我提供的【数据库表结构】和【上下文约束】，将我的【自然语言问题】精准地翻译成一个可以直接在数据库中执行的SQL查询语句。
+
+---
+
+# 上下文约束
+1.  **单一客户环境**: 所有查询都默认在“一个”客户的环境中执行。因此，你生成的SQL不应包含任何试图查询、筛选或遍历多个客户的代码（例如 `customer_id IN (...)` 或 `GROUP BY customer_name`）。请将问题中的“客户”理解为当前操作的隐式环境。
+2.  **严格基于Schema**: 你的所有查询都必须严格使用下面【数据库表结构】中定义的表和列。绝不能虚构不存在的表名或列名。如果问题无法通过给定的Schema解答，请明确指出。
+
+---
 
 # 数据库表结构 (Schema)
 -- 注意: 这里只提供了与用户问题最相关的表 --
 {schema}
 
-# 指示
-1.  严格使用上面定义的表名和列名。
-2.  仔细分析我的自然语言问题，理解其核心意图。
-3.  当需要匹配或显示用户可见的文本（如记录类型、状态、用户名）时，必须使用 `label` 或 `name` 字段进行 `JOIN` 查询。
-4.  将最终的SQL查询语句直接返回，不要添加任何额外的解释或代码块标记。
-"""),
+---
+
+# 工作流程与规则
+1.  **理解意图**: 首先，仔细分析【自然语言问题】，识别出查询的核心意图（例如：查询数据、计数、聚合、查找关联信息等）。
+2.  **识别实体与关联**:
+    * 从问题中定位关键实体，并映射到对应的数据库表。
+    * 识别表与表之间的关联，确定需要使用的 `JOIN` 类型（通常是 `INNER JOIN` 或 `LEFT JOIN`）。
+3.  **构建查询逻辑**:
+    * **选择列 (`SELECT`)**: 确定需要返回哪些列。
+    * **数据源 (`FROM`/`JOIN`)**: 基于第2步确定要查询的表和连接关系。
+    * **过滤条件 (`WHERE`)**: 将问题中的条件（如“最近一个月”、“状态为‘已完成’”）转换成 `WHERE` 子句。
+    * **聚合与分组 (`GROUP BY`/`HAVING`)**: 如果问题涉及聚合（如“总数”、“平均值”），则使用 `GROUP BY` 和聚合函数。
+4.  **关键转换规则**:
+    * **人类可读的文本**: 当问题中提到需要“显示”或“筛选”用户可见的文本（如记录类型、状态、用户名、部门名）时，必须通过 `JOIN` 关联到对应的维度表，如果查询内容为中文，优先使用 label 字段进行筛选和显示。如果为英文，则优先使用 name 字段。
+    * **时间处理**: 对日期和时间的描述（如“今天”、“本周”、“上个月”）要转换成精确的SQL日期函数和区间比较。
+
+---
+
+# 输出格式
+* 直接返回最终的SQL查询语句。
+* **不要**添加任何额外的解释、注释或代码块标记（如 ```sql ... ```）。"""),
         ("user", "{query}")
     ])
-    sql_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
+    # --- End of Updated Prompt ---
+
+    sql_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
     chain = sql_generation_prompt | sql_llm | StrOutputParser()
     generated_sql = chain.invoke({"schema": dynamic_schema_prompt_part, "query": natural_language_query})
     cleaned_sql = re.sub(r"```sql\n|```", "", generated_sql).strip()
@@ -395,7 +420,8 @@ def _analyze_excel_file_with_gemini(excel_path: str) -> str:
         data_string = json.dumps(json_compatible_dict, indent=2, ensure_ascii=False)
         print("✅ 数据已成功转换为JSON格式。")
 
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
+        #llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
         prompt = ChatPromptTemplate.from_messages([
             ("system", """
 ## 任务目标
@@ -534,7 +560,7 @@ def analyze_report_file(file_path: str) -> str:
 def main():
     """主执行函数，以交互式聊天机器人模式运行。"""
     load_dotenv()
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, model_kwargs={"response_mime_type": "application/json"})
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, model_kwargs={"response_mime_type": "application/json"})
     
     tools = [process_data_request, check_jira_status_and_download, analyze_report_file]
 
