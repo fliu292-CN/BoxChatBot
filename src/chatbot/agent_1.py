@@ -553,25 +553,21 @@ async def _find_status_and_download_if_ready(page: Page, context: BrowserContext
     except Exception:
         return f"❌ 未能找到 Jira 工单 {jira_ticket} 对应的卡片。"
     
-    application_status = "未知状态" # Default value
-    execution_status = "peagsus未执行，无执行状态" # Default value
-    
     try:
         application_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("申请状态:")').first
-        application_status = await application_status_locator.inner_text(timeout=10000) # Give it a shorter timeout since it's expected
-    except TimeoutError:
-        print(f"❗️ 获取申请状态超时，将使用默认值: {application_status}")
+        application_status = await application_status_locator.inner_text()
+        try:
+            execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")').first
+            if await execution_status_locator.is_visible(timeout=1000):
+                execution_status = await execution_status_locator.inner_text()
+            else:
+                execution_status = "pagesus未执行，无执行状态"
+        except TimeoutError:
+            execution_status = "pagesus未执行，无执行状态"
     except Exception as e:
-        print(f"❗️ 获取申请状态时出错: {e}")
+        print(f"❗️ 解析状态时出错: {e}")
+        return f"✅ 找到了Jira工单 {jira_ticket} 的卡片，但无法确定其完整状态。"
 
-    try:
-        execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")').first
-        execution_status = await execution_status_locator.inner_text(timeout=10000) # Give it a shorter timeout since it's expected
-    except TimeoutError:
-        print(f"❗️ 获取执行状态超时，将使用默认值: {execution_status}")
-    except Exception as e:
-        print(f"❗️ 获取执行状态时出错: {e}")
-        
     if "executed" in application_status.lower() and "success" in execution_status.lower():
         print(f"✅ 条件满足 (申请状态: {application_status}, 执行状态: {execution_status})。继续执行下载流程...")
     else:
