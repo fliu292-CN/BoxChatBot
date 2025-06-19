@@ -494,20 +494,10 @@ async def fill_form_and_submit(page: Page, approver: str, jira_ticket: str, reas
     await page.get_by_label("SQL内容").fill(sql_query)
     print("✅ SQL 内容已填写。")
     print("\n" + "="*50)
-    print("✋ 表单已填写完毕，等待人工审核！")
-    print("   请检查浏览器窗口中的表单内容是否正确。")
-    confirmation = input("   确认无误并提交申请吗？请输入 'yes' 或 'y' 继续: ")
-    if confirmation.lower() in ['yes', 'y']:
-        print("✅ 用户确认提交，正在点击提交按钮...")
-        submit_button = page.get_by_role("button", name="提交")
-        await expect(submit_button).to_be_enabled(timeout=10000)
-        await submit_button.click()
-        await page.wait_for_load_state("networkidle", timeout=30000)
-        return_message = f"🎉 操作成功！已为 Jira {jira_ticket} 提交申请。"
-    else:
-        return_message = f"🟡 操作已取消。用户在审核后未确认提交 Jira {jira_ticket} 的申请。"
-    print(f"\n{return_message}")
-    return return_message
+    print("✋ 表单已填写完毕，正在自动提交！")
+    await page.get_by_role("button", name="提交").click()
+    print("✅ 表单已提交。")
+    return {"success": True, "message": "表单提交成功！"}
 
 # --- 模块 1.3: 下载和状态检查逻辑 ---
 async def download_file_from_veeva(url: str, headers: dict, output_filename: str) -> str:
@@ -564,12 +554,10 @@ async def _find_status_and_download_if_ready(page: Page, context: BrowserContext
         return f"❌ 未能找到 Jira 工单 {jira_ticket} 对应的卡片。"
     
     try:
-        application_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("申请状态:")')
+        application_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("申请状态:")').first
         application_status = await application_status_locator.inner_text()
-        application_status = application_status.strip().split(':')[1].strip()
-        execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")')
+        execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")').first
         execution_status = await execution_status_locator.inner_text()
-        execution_status = execution_status.strip().split(':')[1].strip()
     except Exception as e:
         print(f"❗️ 解析状态时出错: {e}")
         return f"✅ 找到了Jira工单 {jira_ticket} 的卡片，但无法确定其完整状态。"

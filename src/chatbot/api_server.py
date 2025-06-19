@@ -287,12 +287,12 @@ def process_query_submission(task_id: str, jira_ticket: str, approver: str, sql_
     try:
         update_task_status(task_id, "processing", "SQL已生成，正在执行表单提交...")
         
-        # 执行表单提交操作，传入全局的浏览器会话
+        # 执行表单提交操作，传入全局的浏览器会话  <- 这行注释是旧的，即将被移除或修改
         result = _perform_browser_action(
             fill_form_and_submit,
-            page=_global_page,      # 传入全局page
-            context=_global_context, # 传入全局context
-            browser=_global_browser,  # 传入全局browser
+            # page=_global_page,      # 传入全局page  <- 这些行将被移除
+            # context=_global_context, # 传入全局context
+            # browser=_global_browser,  # 传入全局browser
             approver=approver,
             jira_ticket=jira_ticket,
             reason=f"为Jira工单 {jira_ticket} 查询数据",
