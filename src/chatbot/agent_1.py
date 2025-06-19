@@ -40,32 +40,24 @@ def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password:
     veeva_initial_logged_in_page_url = 'https://pegasus-prod.veevasfa.com/environment/list'
 
     try:
-        print(f"1. 导航到 Veeva 初始登录页面: {veeva_initial_login_url}")
         app_page.goto(veeva_initial_login_url, timeout=60000)
-
-        print("2. 寻找并点击 'Okta登陆CSMC系统' 按钮...")
         okta_login_button_selector = 'text="Okta登陆CSMC系统"'
         # 等待按钮可见
         app_page.wait_for_selector(okta_login_button_selector, state='visible', timeout=30000)
         app_page.click(okta_login_button_selector)
         print("   -> 已点击 'Okta登陆CSMC系统' 按钮。")
-
         print("3. 检查是否需要填写用户名...")
         try:
             # 最佳实践：先显式检查元素是否可见，再执行操作。
             # 这比直接尝试 .fill() 更能避免复杂的等待问题。
             username_locator = app_page.locator('input[name="identifier"]')
-            print("   -> 检查用户名输入框是否可见（5秒超时）...")
             if username_locator.is_visible(timeout=1000):
-                print("   -> 检测到用户名输入框，正在填写...")
                 username_locator.fill(username)
                 print("   -> 用户名填写完成。")
             else:
-                # is_visible 在超时前返回 False，说明元素存在但不可见
                 print("   -> 用户名输入框存在但不可见，跳过此步骤。")
 
         except TimeoutError:
-            # 如果 .is_visible() 在5秒内超时，说明输入框未出现，则捕获异常并继续。
             print("   -> 未在5秒内找到用户名输入框，跳过此步骤继续执行。")
 
         print("4. 正在填写密码...")
