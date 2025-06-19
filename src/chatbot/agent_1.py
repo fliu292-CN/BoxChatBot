@@ -69,7 +69,8 @@ def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password:
 
         print("5. 正在点击 '验证' 按钮...")
         # 定位并点击“验证”按钮
-        app_page.get_by_role("button", name="验证").click(timeout=30000)
+        verify_button_locator = app_page.get_by_role("button", name="Verify").or_(app_page.get_by_role("button", name="验证"))
+        verify_button_locator.click(timeout=30000)
         print("   -> 已点击 '验证' 按钮。")
 
         # 等待登录后跳转到目标 URL
