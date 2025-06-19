@@ -476,6 +476,11 @@ async def fill_form_and_submit(page: Page, approver: str, jira_ticket: str, reas
     (内部函数) 在已登录的应用页面上，找到、填写并提交数据查询表单。
     """
     print("\n🔍 开始在应用页面上执行表单填写操作...")
+    expected_url = 'https://pegasus-prod.veevasfa.com/environment/list'
+    if page.url != expected_url:
+        print(f"⚠️ 当前页面URL不是期望的 {expected_url}，正在导航到该页面...")
+        await page.goto(expected_url, timeout=60000)
+        await page.wait_for_load_state('networkidle', timeout=60000)
     await page.get_by_role("button", name="批量读取").click()
     dialog_locator: Locator = page.locator('div[role="dialog"]').first
     await expect(dialog_locator).to_be_visible(timeout=10000)
