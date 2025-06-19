@@ -654,5 +654,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    _analyze_excel_file_with_gemini("coaching_event_data.xlsx", "统计结果")
+    main()
