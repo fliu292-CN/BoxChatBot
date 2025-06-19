@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veeva pegasus 数据查询分析助手</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="icon" href="assets/img/logo.png" type="image/png">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <img src="assets/img/logo.png" alt="Logo">
+                <h1>Veeva pegasus 数据查询分析助手</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="javascript:void(0);" class="active tab-link" data-tab="chat">聊天</a></li>
+                    <li><a href="javascript:void(0);" class="tab-link" data-tab="form">表单提交</a></li>
+                    <li><a href="javascript:void(0);" class="tab-link" data-tab="results">查询结果</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <!-- 聊天界面 -->
+            <section id="chat" class="tab-content active">
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message bot">
+                            <div class="avatar">
+                                <img src="assets/img/bot-avatar.png" alt="Bot">
+                            </div>
+                            <div class="message-content">
+                                <p>👋 你好！我是你的数据查询与分析助手。你可以通过以下方式与我交互：</p>
+                                <ol>
+                                    <li><strong>提交新申请</strong> - 例如："帮我提交一个数据查询，Jira号是 ORI-120470，找 lucy.jin 审批。我想查所有记录类型为"会议随访"的协访记录。"</li>
+                                    <li><strong>查询状态与下载</strong> - 例如："嘿，帮我查一下 ORI-120624 这个单子的状态。"</li>
+                                    <li><strong>分析已下载的文件</strong> - 例如："好的，请帮我分析一下刚才下载的 Veeva_Report_ORI-120624.xlsx 文件。"</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <textarea id="userInput" placeholder="输入你的请求..."></textarea>
+                        <button id="sendBtn">发送</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 表单提交界面 -->
+            <section id="form" class="tab-content">
+                <div class="form-container">
+                    <h2>提交数据查询申请</h2>
+                    <form id="dataRequestForm">
+                        <div class="form-group">
+                            <label for="jiraTicket">Jira 工单号</label>
+                            <input type="text" id="jiraTicket" name="jiraTicket" placeholder="例如：ORI-120470" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="approver">审批人</label>
+                            <input type="text" id="approver" name="approver" placeholder="例如：lucy.jin" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="queryDescription">数据查询描述</label>
+                            <textarea id="queryDescription" name="queryDescription" placeholder="请描述你想查询什么数据..." required></textarea>
+                        </div>
+                        <button type="submit" class="submit-btn">提交申请</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- 查询结果界面 -->
+            <section id="results" class="tab-content">
+                <div class="results-container">
+                    <h2>查询结果与状态</h2>
+                    <div class="status-checker">
+                        <div class="form-group">
+                            <label for="statusJiraTicket">查询工单状态</label>
+                            <div class="status-input">
+                                <input type="text" id="statusJiraTicket" placeholder="输入Jira工单号...">
+                                <button id="checkStatusBtn">查询状态</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="status-result hidden" id="statusResult">
+                        <h3>工单状态</h3>
+                        <div class="status-card">
+                            <div class="status-header">
+                                <span class="jira-id">ORI-XXXXX</span>
+                                <span class="status-badge">等待审批</span>
+                            </div>
+                            <div class="status-details">
+                                <div class="status-item">
+                                    <span class="item-label">申请状态:</span>
+                                    <span class="item-value">等待审批</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="item-label">执行状态:</span>
+                                    <span class="item-value">待执行</span>
+                                </div>
+                            </div>
+                            <div class="status-actions hidden" id="downloadSection">
+                                <button class="download-btn">下载结果</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <h3>数据分析</h3>
+                        <div class="file-selector">
+                            <input type="file" id="fileToAnalyze" accept=".xlsx,.xls">
+                            <button id="analyzeFileBtn">分析文件</button>
+                        </div>
+                        <div class="analysis-result hidden" id="analysisResult">
+                            <h4>分析结果</h4>
+                            <div class="result-table-container">
+                                <table class="result-table">
+                                    <thead>
+                                        <tr>
+                                            <th>排名</th>
+                                            <th>客户名称</th>
+                                            <th>数据量</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- 示例数据，实际应由JavaScript填充 -->
+                                        <tr>
+                                            <td>1</td>
+                                            <td>客户A</td>
+                                            <td>1280</td>
+                                        </tr>
+                                        <tr>
+                                            <td>2</td>
+                                            <td>客户B</td>
+                                            <td>940</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>© 2023 VVeeva pegasus 数据查询分析助手 | Demo版本</p>
+        </footer>
+    </div>
+
+    <!-- 先加载API客户端 -->
+    <script src="assets/js/api_client.js"></script>
+    <!-- 然后加载其他脚本 -->
+    <script src="assets/js/main.js"></script>
+    <script src="components/chat.js"></script>
+    <script src="components/form.js"></script>
+    <script src="components/results.js"></script>
+</body>
+</html> 
