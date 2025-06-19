@@ -105,7 +105,9 @@ def _select_relevant_tables(natural_language_query: str) -> list[str]:
 """),
         ("user", "{query}")
     ])
-    table_selection_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
+    table_selection_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0,
+                                                 google_api_key=os.getenv("GOOGLE_API_KEY")
+)
     chain = table_selection_prompt | table_selection_llm | StrOutputParser()
     response = chain.invoke({"query": natural_language_query})
     selected_tables = [table.strip() for table in response.split(',') if table.strip() in ALL_SCHEMAS]
