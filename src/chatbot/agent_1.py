@@ -1,6 +1,8 @@
 import os
 import re
 import json
+from typing import Tuple
+
 import requests
 import pandas as pd
 from urllib.parse import urljoin
@@ -14,6 +16,93 @@ from playwright.sync_api import (Browser, BrowserContext, Locator, Page,
                                   expect, sync_playwright, Playwright)
 
 # --- 模块 1: 核心业务逻辑 ---
+def _login_pegasus(p: Playwright, okta_push: str, username: str, password: str):
+    if not okta_push and okta_push == 'True':
+       return _login_and_get_app_page(p,username,password)
+    else:
+        return _login_and_get_app_page_no_okta_push(p,username,password)
+
+
+def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password: str) -> Tuple[Page, BrowserContext, Browser]:
+    """
+    使用 Playwright 登录 Veeva 系统并返回页面、上下文和浏览器实例。
+    此函数处理通过 Okta 的登录流程，并假定用户名已预先填充或由 SSO 处理。
+    它会填写密码并处理后续的验证步骤。
+    Returns: 一个元组，包含成功登录后的 Page, BrowserContext, 和 Browser 对象。
+    """
+    print("🚀 开始 Veeva 登录流程...")
+    # 以非无头模式启动浏览器，便于调试
+    browser = p.chromium.launch(headless=False, timeout=60000)
+    context: BrowserContext = browser.new_context()
+    app_page: Page = context.new_page()
+
+    veeva_initial_login_url = 'https://pegasus-prod.veevasfa.com/login'
+    veeva_initial_logged_in_page_url = 'https://pegasus-prod.veevasfa.com/environment/list'
+
+    try:
+        print(f"1. 导航到 Veeva 初始登录页面: {veeva_initial_login_url}")
+        app_page.goto(veeva_initial_login_url, timeout=60000)
+
+        print("2. 寻找并点击 'Okta登陆CSMC系统' 按钮...")
+        okta_login_button_selector = 'text="Okta登陆CSMC系统"'
+        # 等待按钮可见
+        app_page.wait_for_selector(okta_login_button_selector, state='visible', timeout=30000)
+        app_page.click(okta_login_button_selector)
+        print("   -> 已点击 'Okta登陆CSMC系统' 按钮。")
+
+        print("3. 检查是否需要填写用户名...")
+        try:
+            # 最佳实践：先显式检查元素是否可见，再执行操作。
+            # 这比直接尝试 .fill() 更能避免复杂的等待问题。
+            username_locator = app_page.locator('input[name="identifier"]')
+            print("   -> 检查用户名输入框是否可见（5秒超时）...")
+            if username_locator.is_visible(timeout=1000):
+                print("   -> 检测到用户名输入框，正在填写...")
+                username_locator.fill(username)
+                print("   -> 用户名填写完成。")
+            else:
+                # is_visible 在超时前返回 False，说明元素存在但不可见
+                print("   -> 用户名输入框存在但不可见，跳过此步骤。")
+
+        except TimeoutError:
+            # 如果 .is_visible() 在5秒内超时，说明输入框未出现，则捕获异常并继续。
+            print("   -> 未在5秒内找到用户名输入框，跳过此步骤继续执行。")
+
+        print("4. 正在填写密码...")
+        # 定位密码输入框并填充
+        password_input_locator = app_page.locator('input[name="credentials.passcode"]')
+        password_input_locator.wait_for(state="visible", timeout=60000)
+        password_input_locator.fill(password)
+        print("   -> 完成填写密码。")
+
+        print("5. 正在点击 '验证' 按钮...")
+        # 定位并点击“验证”按钮
+        app_page.get_by_role("button", name="验证").click(timeout=30000)
+        print("   -> 已点击 '验证' 按钮。")
+
+        # 等待登录后跳转到目标 URL
+        print(f"6. 等待导航至 Veeva 目标页面: {veeva_initial_logged_in_page_url}")
+        app_page.wait_for_url(veeva_initial_logged_in_page_url, timeout=60000)
+
+        print(f"✅ 登录成功! 当前页面 URL: {app_page.url}")
+        app_page.wait_for_load_state("networkidle", timeout=60000)
+        print("✅ 应用页面已完全加载。")
+
+        # 成功后返回所需的对象
+        return app_page, context, browser
+
+    except Exception as e:
+        # 错误处理
+        print(f"登录过程中发生严重错误: {e}")
+        # 保存截图以供调试
+        screenshot_path = "playwright_login_error.png"
+        app_page.screenshot(path=screenshot_path)
+        print(f"已保存错误截图至: {screenshot_path}")
+        # 关闭浏览器以释放资源
+        browser.close()
+        # 重新抛出异常，以便上层调用者知道登录失败
+        raise
+
 
 # --- 模块 1.1: 浏览器和认证 (无改动) ---
 def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tuple[Page, BrowserContext, Browser]:
@@ -105,7 +194,7 @@ def _select_relevant_tables(natural_language_query: str) -> list[str]:
 """),
         ("user", "{query}")
     ])
-    table_selection_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0,
+    table_selection_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0,
                                                  google_api_key=os.getenv("GOOGLE_API_KEY")
 )
     chain = table_selection_prompt | table_selection_llm | StrOutputParser()
@@ -366,6 +455,7 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     """
     username = os.getenv("VEEVA_USERNAME")
     password = os.getenv("VEEVA_PASSWORD")
+    okta_push = os.getenv("OKTA_PUSH")
     if not username or not password:
         return "错误：VEEVA_USERNAME 或 VEEVA_PASSWORD 环境变量未设置。"
     
@@ -374,7 +464,7 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     try:
         with sync_playwright() as p:
             try:
-                app_page, context, browser = _login_and_get_app_page(p, username, password)
+                app_page, context, browser = _login_pegasus(p,okta_push, username, password)
                 result = action_callable(page=app_page, context=context, **action_kwargs)
             except Exception as e:
                 return f"😭 操作执行过程中发生严重错误: {e}"
