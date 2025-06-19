@@ -5,6 +5,8 @@ from typing import Tuple
 
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
+import io
 from urllib.parse import urljoin
 from dotenv import load_dotenv
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -425,6 +427,72 @@ def _get_prompt_detail_by_user_requirement(user_requirement: str) -> str:
     return prompt_detail
 
 
+def generate_report_from_data(data_string, chart_filename):
+    """
+    根据输入的字符串数据生成报告。
+
+    Args:
+        data_string (str): 包含客户数据的多行字符串。
+    """
+    # --- 1. 读取数据并创建DataFrame ---
+    # 使用io.StringIO将字符串模拟成一个文件
+    data = io.StringIO(data_string)
+    df = pd.read_csv(data)
+    
+    print("成功读取数据。")
+    
+    # --- 2. 将完整数据保存到CSV文件 ---
+    csv_filename = 'customer_data.csv'
+    # 使用 encoding='utf-8-sig' 确保在Windows Excel中打开CSV文件时中文不乱码
+    df.to_csv(csv_filename, index=False, encoding='utf-8-sig')
+    print(f"完整数据已保存到文件: {csv_filename}")
+    
+    # --- 3. 准备绘图数据 ---
+    # 筛选出数据量大于0的客户，使图表更清晰
+    df_to_plot = df[df['数据量'] > 0].copy()
+    
+    # 如果没有数据可供绘图，则退出
+    if df_to_plot.empty:
+        print("没有数据量大于0的客户，无法生成图表。")
+        return
+
+    # 对数据进行排序，确保柱状图从高到低显示
+    df_to_plot.sort_values(by='数据量', ascending=False, inplace=True)
+        
+    # --- 4. 生成柱状图 ---
+    # 设置matplotlib以正确显示中文
+    plt.rcParams['font.sans-serif'] = ['SimHei']  # 'SimHei' 是一个常用的支持中文的字体
+    plt.rcParams['axes.unicode_minus'] = False  # 修正负号显示问题
+    
+    # 创建图表
+    plt.figure(figsize=(12, 7)) # 设置画布大小
+    bars = plt.bar(df_to_plot['客户名称'], df_to_plot['数据量'], color='skyblue')
+    
+    # 在柱子顶端添加数据标签
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, int(yval), va='bottom', ha='center', fontsize=10)
+    
+    # 设置图表标题和坐标轴标签
+    plt.title('客户数据量对比分析', fontsize=16)
+    plt.xlabel('客户名称', fontsize=12)
+    plt.ylabel('数据量', fontsize=12)
+    
+    # 旋转X轴标签以防重叠
+    plt.xticks(rotation=45, ha='right')
+    
+    # 添加网格线
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    # 自动调整布局，防止标签被截断
+    plt.tight_layout()
+    
+    # --- 5. 保存图表到文件 ---
+    # chart_filename = 'customer_volume_chart.png'
+    plt.savefig(chart_filename)
+    print(f"柱状图已保存到文件: {chart_filename}")
+
+
 # --- 模块 1.4: 数据分析逻辑 ---
 def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> str:
     """
@@ -473,10 +541,12 @@ def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> s
         print("--- Gemini 分析结果 ---\n" + analysis_result + "\n------------------------")
         
         report_filename = f"Gemini分析报告_{os.path.basename(excel_path).replace('.xlsx', '.csv')}"
-        with open(report_filename, 'w', encoding='utf-8') as f:
+        with open(report_filename, 'w', encoding='utf-8-sig') as f:
             f.write(analysis_result)
         print(f"✅ Gemini 分析结果已保存到 '{report_filename}'")
         
+        generate_report_from_data(analysis_result, f"Gemini分析报告_{os.path.basename(excel_path).replace('.xlsx', '.png')}")
+
         return f"📊 分析完成！结果如下：\n\n{analysis_result}\n\n报告也已保存到文件 '{report_filename}'。"
     except Exception as e:
         error_message = f"❌ 数据分析或API调用过程中发生错误: {e}"
