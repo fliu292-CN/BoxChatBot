@@ -499,7 +499,7 @@ def generate_report_from_data(data_string, chart_filename):
         
     # --- 4. 生成柱状图 ---
     # 设置matplotlib以正确显示中文
-    plt.rcParams['font.sans-serif'] = ['SimHei']  # 'SimHei' 是一个常用的支持中文的字体
+    plt.rcParams['font.sans-serif'] = ['STHeiti']  # 'SimHei' 是一个常用的支持中文的字体
     plt.rcParams['axes.unicode_minus'] = False  # 修正负号显示问题
     
     # 创建图表
