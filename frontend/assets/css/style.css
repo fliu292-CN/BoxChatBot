@@ -5,6 +5,27 @@
     box-sizing: border-box;
 }
 
+html {
+    margin: 0; /* 确保无默认外边距 */
+    padding: 0; /* 确保无默认内边距 */
+    height: 100%; /* 确保html占据整个视口高度 */
+    width: 100%; /* 确保html占据整个视口宽度 */
+    overflow-x: hidden; /* 防止水平滚动条 */
+    overflow-y: auto; /* 允许垂直滚动 */
+}
+
+body {
+    /* height: 100%; */ /* 移除，让内容决定高度 */
+    /* min-height: 100vh; */ /* 移除，让内容决定高度 */
+    display: flex; /* 设为flex容器 */
+    flex-direction: column; /* 垂直堆叠 */
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-primary);
+    background-color: #1a1a2e; /* 深蓝色背景，更具科技感 */
+    line-height: 1.65;
+    font-size: 16px;
+}
+
 :root {
     /* 新的浅橘色调色板 */
     --primary-color: #FF7D45;        /* 主橙色 */
@@ -24,26 +45,22 @@
     --glow-accent: rgba(0, 198, 255, 0.6); /* 强调色发光 */
 }
 
-body {
-    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-    color: var(--text-primary);
-    background-color: #1a1a2e; /* 深蓝色背景，更具科技感 */
-    line-height: 1.65;
-    font-size: 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
+/* 背景叠加的科技感图案 */
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background-image: 
-        radial-gradient(circle at 15% 50%, rgba(255, 125, 69, 0.1) 0%, transparent 25%),
-        radial-gradient(circle at 85% 50%, rgba(0, 198, 255, 0.1) 0%, transparent 25%),
-        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 2px, transparent 2px, transparent 4px),
-        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 2px, transparent 2px, transparent 4px);
-    background-size: 1000px 1000px, 800px 800px, 100px 100px, 100px 100px;
-    background-position: top left, bottom right, 0 0, 0 0;
-    background-repeat: no-repeat, no-repeat, repeat, repeat;
-    animation: backgroundMove 60s linear infinite alternate, gridPulse 10s linear infinite;
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.01) 0px, rgba(255, 255, 255, 0.01) 1px, transparent 1px, transparent 20px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.01) 0px, rgba(255, 255, 255, 0.01) 1px, transparent 1px, transparent 20px);
+    background-size: 20px 20px, 20px 20px;
+    opacity: 0.6; /* 调整透明度，使其更明显但仍保持微妙 */
+    z-index: 0;
+    pointer-events: none;
+    animation: gridPulse 10s linear infinite; /* 添加脉冲动画 */
 }
 
 @keyframes backgroundMove {
@@ -68,26 +85,55 @@ body {
     max-width: 1000px;
     margin: 0 auto;
     background-color: rgba(255, 255, 255, 0.05); /* 半透明背景 */
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 30px var(--glow-primary); /* 更深阴影和发光 */
+    box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.4), /* 主阴影 */
+        0 0 30px var(--glow-primary), /* 主色发光 */
+        inset 0 0 10px rgba(255, 255, 255, 0.05); /* 内部微光 */
     border-radius: 20px; /* 更圆润 */
-    overflow: hidden;
     backdrop-filter: blur(15px); /* 增强模糊效果 */
     border: 1px solid rgba(255, 255, 255, 0.1); /* 半透明边框 */
     transition: all 0.5s ease-in-out; /* 更慢的过渡 */
     position: relative;
     z-index: 2;
+    flex: 1; /* 使其在body的flex布局中填充剩余空间 */
+}
+
+.app-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(255, 125, 69, 0.1) 0%, transparent 25%),
+        radial-gradient(circle at 85% 50%, rgba(0, 198, 255, 0.1) 0%, transparent 25%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 2px, transparent 2px, transparent 4px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 2px, transparent 2px, transparent 4px);
+    background-size: 1000px 1000px, 800px 800px, 100px 100px, 100px 100px;
+    background-position: top left, bottom right, 0 0, 0 0;
+    background-repeat: no-repeat, no-repeat, repeat, repeat;
+    animation: backgroundMove 60s linear infinite alternate, gridPulse 10s linear infinite;
+    opacity: 0.8; /* 与body::before的透明度保持一致 */
+    z-index: -1; /* 确保在app-container内容之下 */
+    pointer-events: none;
 }
 
 .app-container:hover {
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6), 0 0 40px var(--glow-accent); /* 悬停时更强烈的阴影和强调色发光 */
+    box-shadow: 
+        0 15px 50px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 40px var(--glow-accent), /* 悬停时更强烈的强调色发光 */
+        inset 0 0 15px rgba(255, 255, 255, 0.1); /* 内部微光 */
     transform: translateY(-5px); /* 悬浮效果 */
 }
 
 /* 头部样式 */
 header {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5), 0 0 20px var(--glow-primary); /* 增强阴影和发光 */
-    padding: 25px 35px; /* 增加内边距 */
+    box-shadow: 
+        0 5px 25px rgba(0, 0, 0, 0.5), /* 增强阴影 */
+        0 0 20px var(--glow-primary); /* 发光 */
+    padding: 15px 35px; /* 减少内边距 */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -132,8 +178,11 @@ header::after {
     font-size: 1.8rem; /* 调整字体大小 */
     margin: 0;
     color: white;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.7); /* 文字发光 */
+    text-shadow: 
+        0 0 15px var(--glow-primary), /* 更柔和且有深度的发光 */
+        0 0 30px rgba(255, 125, 69, 0.1); /* 额外微弱光晕 */
     font-weight: 800; /* 更粗的字重 */
+    letter-spacing: 1px; /* 增加字间距，更具科技感 */
 }
 
 nav ul {
@@ -169,7 +218,9 @@ nav a.active, nav a.tab-link.active {
     color: #FFFFFF;
     border-bottom-color: var(--accent-color);
     font-weight: 800;
-    text-shadow: 0 0 8px var(--glow-accent); /* 激活时发光 */
+    text-shadow: 
+        0 0 8px var(--glow-accent), /* 激活时发光 */
+        0 0 20px rgba(0, 198, 255, 0.4); /* 更强发光 */
 }
 
 nav a.active::after, nav a.tab-link.active::after {
@@ -201,6 +252,12 @@ main {
     background-color: rgba(255, 255, 255, 0.02); /* 更透明的主内容背景 */
     position: relative;
     z-index: 1;
+    background-image: 
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.005) 0px, rgba(255, 255, 255, 0.005) 1px, transparent 1px, transparent 20px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.005) 0px, rgba(255, 255, 255, 0.005) 1px, transparent 1px, transparent 20px);
+    background-size: 20px 20px, 20px 20px; /* 与body::before的网格大小一致 */
+    background-blend-mode: overlay; /* 混合模式，使效果更柔和 */
+    transition: background-color 0.3s ease; /* 添加过渡效果 */
 }
 
 .tab-content {
@@ -216,13 +273,14 @@ main {
 .chat-container {
     display: flex;
     flex-direction: column;
-    height: 75vh;
     min-height: 500px;
     border: 1px solid rgba(255, 255, 255, 0.15); /* 半透明边框 */
     border-radius: 15px;
-    overflow: hidden;
     background-color: rgba(255, 255, 255, 0.05); /* 半透明背景 */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-primary); /* 更柔和的阴影和发光 */
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.3), /* 主阴影 */
+        0 0 15px var(--glow-primary), /* 发光 */
+        inset 0 0 8px rgba(255, 255, 255, 0.05); /* 内部微光 */
 }
 
 .chat-messages {
@@ -255,7 +313,9 @@ main {
     overflow: hidden;
     margin: 0 15px; /* 调整边距 */
     border: 2px solid var(--accent-color); /* 头像边框使用强调色 */
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-accent); /* 增强阴影和发光 */
+    box-shadow: 
+        0 3px 12px rgba(0, 0, 0, 0.3), /* 增强阴影 */
+        0 0 10px var(--glow-accent); /* 发光 */
     flex-shrink: 0;
 }
 
@@ -270,12 +330,34 @@ main {
     padding: 16px 20px; /* 增加内边距 */
     border-radius: 20px; /* 更圆润的边角 */
     background-color: rgba(255, 255, 255, 0.08); /* 更透明的消息背景 */
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px rgba(255, 255, 255, 0.2); /* 柔和的阴影和微光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.2), /* 柔和的阴影 */
+        0 0 10px rgba(255, 255, 255, 0.2), /* 微光 */
+        inset 0 0 5px rgba(0, 0, 0, 0.1); /* 内部微暗 */
     border: 1px solid rgba(255, 255, 255, 0.15); /* 更透明边框 */
     line-height: 1.7;
     font-size: 1rem; /* 调整字体大小 */
     color: rgba(255, 255, 255, 0.9); /* 白色文字 */
     position: relative;
+    transition: all 0.2s ease; /* 添加过渡效果 */
+}
+
+.message-content:hover {
+    background-color: rgba(255, 255, 255, 0.12); /* 悬停时背景更亮 */
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.3), /* 悬停时更深阴影 */
+        0 0 15px rgba(255, 255, 255, 0.3), /* 悬停时更亮微光 */
+        inset 0 0 8px rgba(0, 0, 0, 0.15); /* 悬停时内部微暗 */
+    transform: translateY(-2px); /* 悬浮效果 */
+}
+
+.message-content:active {
+    background-color: rgba(255, 255, 255, 0.05); /* 点击时背景更暗 */
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.1), /* 点击时更浅阴影 */
+        0 0 5px rgba(255, 255, 255, 0.1), /* 点击时微光 */
+        inset 0 0 10px rgba(0, 0, 0, 0.2); /* 点击时更深内部微暗 */
+    transform: translateY(0); /* 按压效果 */
 }
 
 .message-content p {
@@ -289,14 +371,20 @@ main {
     border-top-left-radius: 8px; /* 调整边角 */
     background-color: rgba(255, 125, 69, 0.1); /* 机器人消息背景 */
     border: 1px solid rgba(255, 125, 69, 0.3);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px var(--glow-primary); /* 发光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.2), /* 阴影 */
+        0 0 10px var(--glow-primary), /* 发光 */
+        inset 0 0 5px rgba(0, 0, 0, 0.1); /* 内部微暗 */
 }
 
 .message.user .message-content {
     border-top-right-radius: 8px; /* 调整边角 */
     background: linear-gradient(135deg, rgba(0, 198, 255, 0.1) 0%, rgba(0, 151, 204, 0.1) 100%); /* 用户消息渐变背景 */
     border: 1px solid rgba(0, 198, 255, 0.3);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px var(--glow-accent); /* 发光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.2), /* 阴影 */
+        0 0 10px var(--glow-accent), /* 发光 */
+        inset 0 0 5px rgba(0, 0, 0, 0.1); /* 内部微暗 */
 }
 
 .message-content ol,
@@ -335,18 +423,23 @@ main {
     color: white; /* 白色文字 */
     background-color: rgba(255, 255, 255, 0.05); /* 半透明背景 */
     transition: all 0.3s ease;
-    box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+        inset 0 1px 5px rgba(0, 0, 0, 0.2), /* 内部阴影 */
+        0 0 5px rgba(255, 255, 255, 0.1); /* 微光 */
 }
 
 .chat-input textarea::placeholder {
-    color: rgba(255, 255, 255, 0.6); /* 占位符颜色 */
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .chat-input textarea:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 4px rgba(0, 198, 255, 0.3), inset 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-accent); /* 聚焦时更强发光效果 */
-    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 0 0 5px rgba(0, 198, 255, 0.4), /* 外部更强发光环 */
+        inset 0 1px 8px rgba(0, 0, 0, 0.4), /* 内部更深阴影 */
+        0 0 20px var(--glow-accent); /* 聚焦时更强发光效果 */
+    background-color: rgba(255, 255, 255, 0.15); /* 聚焦时背景更亮 */
 }
 
 .chat-input button {
@@ -358,20 +451,26 @@ main {
     font-size: 1.1rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-primary); /* 发光 */
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.4), /* 增强阴影 */
+        0 0 12px var(--glow-primary); /* 增强发光 */
     font-weight: 700;
     flex-shrink: 0;
 }
 
 .chat-input button:hover {
     background: linear-gradient(45deg, var(--primary-dark), var(--primary-color));
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 15px var(--glow-primary); /* 悬停时更强发光 */
-    transform: translateY(-3px);
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 20px var(--glow-primary); /* 悬停时更强发光 */
+    transform: translateY(-5px); /* 悬浮效果更明显 */
 }
 
 .chat-input button:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-primary);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 点击时阴影 */
+        0 0 8px var(--glow-primary); /* 点击时发光 */
 }
 
 /* 表单容器 */
@@ -379,7 +478,10 @@ main {
     background-color: rgba(255, 255, 255, 0.05); /* 半透明背景 */
     padding: 35px;
     border-radius: 15px;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-accent); /* 阴影和发光 */
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.3), /* 阴影 */
+        0 0 15px var(--glow-accent), /* 发光 */
+        inset 0 0 8px rgba(255, 255, 255, 0.05); /* 内部微光 */
     margin-bottom: 30px;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -391,7 +493,9 @@ main {
     padding-bottom: 15px;
     border-bottom: 2px solid var(--primary-light);
     position: relative;
-    text-shadow: 0 0 8px rgba(255, 125, 69, 0.5);
+    text-shadow: 
+        0 0 12px var(--glow-primary), /* 更强发光 */
+        0 0 25px rgba(255, 125, 69, 0.3); /* 额外微弱光晕 */
 }
 
 .form-container h2::after, .results-container h2::after {
@@ -428,7 +532,9 @@ main {
     color: white;
     background-color: rgba(255, 255, 255, 0.05);
     transition: all 0.3s ease;
-    box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+        inset 0 1px 5px rgba(0, 0, 0, 0.2), /* 内部阴影 */
+        0 0 5px rgba(255, 255, 255, 0.1); /* 微光 */
 }
 
 .form-group input::placeholder,
@@ -440,8 +546,11 @@ main {
 .form-group textarea:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 4px rgba(0, 198, 255, 0.3), inset 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-accent);
-    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 0 0 5px rgba(0, 198, 255, 0.4), /* 外部更强发光环 */
+        inset 0 1px 8px rgba(0, 0, 0, 0.4), /* 内部更深阴影 */
+        0 0 20px var(--glow-accent); /* 聚焦时更强发光效果 */
+    background-color: rgba(255, 255, 255, 0.15); /* 聚焦时背景更亮 */
 }
 
 .form-group textarea {
@@ -458,7 +567,9 @@ main {
     font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-accent);
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.4), /* 增强阴影 */
+        0 0 12px var(--glow-accent); /* 增强发光 */
     font-weight: 700;
     display: block;
     margin: 30px auto 0;
@@ -466,13 +577,17 @@ main {
 
 .submit-btn:hover {
     background: linear-gradient(45deg, var(--accent-dark), var(--accent-color));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 15px var(--glow-accent);
-    transform: translateY(-3px);
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 20px var(--glow-accent); /* 悬停时更强发光 */
+    transform: translateY(-5px); /* 悬浮效果更明显 */
 }
 
 .submit-btn:active {
     transform: translateY(0);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-accent);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 点击时阴影 */
+        0 0 8px var(--glow-accent); /* 点击时发光 */
 }
 
 /* 查询结果界面 */
@@ -484,7 +599,7 @@ main {
     border-bottom: 2px solid var(--primary-light);
     padding-bottom: 12px;
     position: relative;
-    text-shadow: 0 0 8px rgba(255, 125, 69, 0.5);
+    text-shadow: 0 0 10px rgba(255, 125, 69, 0.6), 0 0 20px rgba(255, 125, 69, 0.3); /* 调整发光 */
 }
 
 .results-container h3::after {
@@ -519,7 +634,9 @@ main {
     color: white;
     background-color: rgba(255, 255, 255, 0.05);
     transition: all 0.3s ease;
-    box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+        inset 0 1px 5px rgba(0, 0, 0, 0.2), /* 内部阴影 */
+        0 0 5px rgba(255, 255, 255, 0.1); /* 微光 */
 }
 
 .status-input input::placeholder {
@@ -529,8 +646,11 @@ main {
 .status-input input:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 4px rgba(0, 198, 255, 0.3), inset 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-accent);
-    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 0 0 5px rgba(0, 198, 255, 0.4), /* 外部更强发光环 */
+        inset 0 1px 8px rgba(0, 0, 0, 0.4), /* 内部更深阴影 */
+        0 0 20px var(--glow-accent); /* 聚焦时更强发光效果 */
+    background-color: rgba(255, 255, 255, 0.15); /* 聚焦时背景更亮 */
 }
 
 .status-input button {
@@ -542,20 +662,26 @@ main {
     font-size: 1.1rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-accent);
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.4), /* 增强阴影 */
+        0 0 12px var(--glow-accent); /* 增强发光 */
     font-weight: 700;
     flex-shrink: 0;
 }
 
 .status-input button:hover {
     background: linear-gradient(45deg, var(--accent-dark), var(--accent-color));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 15px var(--glow-accent);
-    transform: translateY(-3px);
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 20px var(--glow-accent); /* 悬停时更强发光 */
+    transform: translateY(-5px); /* 悬浮效果更明显 */
 }
 
 .status-input button:active {
     transform: translateY(0);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-accent);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 点击时阴影 */
+        0 0 8px var(--glow-accent); /* 点击时发光 */
 }
 
 .status-result, .analysis-result {
@@ -564,12 +690,16 @@ main {
     padding: 30px;
     margin-top: 35px;
     border: 1px dashed rgba(255, 125, 69, 0.2); /* 柔和虚线边框 */
-    box-shadow: inset 0 0 20px rgba(255, 125, 69, 0.1), 0 0 15px rgba(255, 125, 69, 0.2); /* 内部阴影和外部发光 */
+    box-shadow: 
+        inset 0 0 20px rgba(255, 125, 69, 0.1), /* 内部阴影 */
+        0 0 15px rgba(255, 125, 69, 0.2); /* 外部发光 */
     transition: all 0.5s ease-in-out;
 }
 
 .status-result:hover, .analysis-result:hover {
-    box-shadow: inset 0 0 25px rgba(255, 125, 69, 0.15), 0 0 20px rgba(255, 125, 69, 0.3); /* 增强悬停效果 */
+    box-shadow: 
+        inset 0 0 25px rgba(255, 125, 69, 0.15), /* 增强内部阴影 */
+        0 0 20px rgba(255, 125, 69, 0.3); /* 增强悬停效果 */
 }
 
 .status-result h3, .analysis-result h4 {
@@ -578,7 +708,7 @@ main {
     font-size: 1.5rem;
     border-bottom: 1px dotted rgba(255, 255, 255, 0.2);
     padding-bottom: 12px;
-    text-shadow: 0 0 5px rgba(255, 125, 69, 0.4);
+    text-shadow: 0 0 10px rgba(255, 125, 69, 0.6), 0 0 20px rgba(255, 125, 69, 0.3); /* 调整发光 */
 }
 
 .status-card {
@@ -586,12 +716,16 @@ main {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 15px;
     padding: 30px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-primary); /* 阴影和发光 */
+    box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.3), /* 阴影 */
+        0 0 15px var(--glow-primary); /* 发光 */
     transition: all 0.5s ease;
 }
 
 .status-card:hover {
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 20px var(--glow-primary); /* 增强悬停效果 */
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.5), /* 增强阴影 */
+        0 0 20px var(--glow-primary); /* 增强悬停效果 */
     transform: translateY(-8px);
 }
 
@@ -608,7 +742,9 @@ main {
     font-size: 1.6rem;
     font-weight: 900;
     color: var(--primary-color);
-    text-shadow: 0 0 10px rgba(255, 125, 69, 0.7);
+    text-shadow: 
+        0 0 10px rgba(255, 125, 69, 0.7), /* 文字发光 */
+        0 0 20px rgba(255, 125, 69, 0.3); /* 更强发光 */
 }
 
 .status-badge {
@@ -686,19 +822,25 @@ main {
     font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(76, 175, 80, 0.5); /* 发光 */
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.4), /* 增强阴影 */
+        0 0 12px rgba(76, 175, 80, 0.6); /* 增强发光 */
     font-weight: 700;
 }
 
 .download-btn:hover {
     background: linear-gradient(45deg, #2E7D32, #4CAF50);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(76, 175, 80, 0.7); /* 悬停时更强发光 */
-    transform: translateY(-3px);
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 20px rgba(76, 175, 80, 0.8); /* 悬停时更强发光 */
+    transform: translateY(-5px); /* 悬浮效果更明显 */
 }
 
 .download-btn:active {
     transform: translateY(0);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px rgba(76, 175, 80, 0.3);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 点击时阴影 */
+        0 0 8px rgba(76, 175, 80, 0.4); /* 点击时发光 */
 }
 
 .file-selector {
@@ -720,7 +862,13 @@ main {
     background-color: rgba(255, 255, 255, 0.05);
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+        inset 0 1px 5px rgba(0, 0, 0, 0.2), /* 内部阴影 */
+        0 0 5px rgba(255, 255, 255, 0.1); /* 微光 */
+}
+
+.file-selector input[type="file"]::placeholder {
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .file-selector input[type="file"]::-webkit-file-upload-button {
@@ -744,11 +892,15 @@ main {
     font-weight: 700;
     font-size: 1rem;
     transition: all 0.3s ease;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), 0 0 8px var(--glow-accent);
+    box-shadow: 
+        0 3px 10px rgba(0, 0, 0, 0.3), /* 阴影 */
+        0 0 8px var(--glow-accent); /* 发光 */
 }
 .file-selector input[type="file"]:hover::before {
     background: linear-gradient(45deg, var(--accent-dark), var(--accent-color));
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4), 0 0 12px var(--glow-accent);
+    box-shadow: 
+        0 5px 15px rgba(0, 0, 0, 0.4), /* 悬停时更深阴影 */
+        0 0 12px var(--glow-accent); /* 悬停时更强发光 */
 }
 .file-selector input[type="file"]:active::before {
     background: var(--accent-dark);
@@ -764,20 +916,26 @@ main {
     font-size: 1.1rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-primary);
+    box-shadow: 
+        0 5px 20px rgba(0, 0, 0, 0.4), /* 增强阴影 */
+        0 0 12px var(--glow-primary); /* 增强发光 */
     font-weight: 700;
     flex-shrink: 0;
 }
 
 .file-selector button:hover {
     background: linear-gradient(45deg, var(--primary-dark), var(--primary-color));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 15px var(--glow-primary);
-    transform: translateY(-3px);
+    box-shadow: 
+        0 8px 30px rgba(0, 0, 0, 0.6), /* 悬停时更深阴影 */
+        0 0 20px var(--glow-primary); /* 悬停时更强发光 */
+    transform: translateY(-5px); /* 悬浮效果更明显 */
 }
 
 .file-selector button:active {
     transform: translateY(-1px);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-primary);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 点击时阴影 */
+        0 0 8px var(--glow-primary); /* 点击时发光 */
 }
 
 .result-table-container {
@@ -786,7 +944,9 @@ main {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 12px;
     margin-top: 30px;
-    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1), 0 0 10px rgba(255, 255, 255, 0.1); /* 内部阴影和外部微光 */
+    box-shadow: 
+        inset 0 0 20px rgba(0, 0, 0, 0.1), /* 内部阴影 */
+        0 0 10px rgba(255, 255, 255, 0.1); /* 外部微光 */
 }
 
 .result-table {
@@ -810,7 +970,9 @@ main {
     position: sticky;
     top: 0;
     z-index: 2;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-primary); /* 增强阴影和发光 */
+    box-shadow: 
+        0 2px 10px rgba(0, 0, 0, 0.2), /* 增强阴影 */
+        0 0 5px var(--glow-primary); /* 发光 */
 }
 
 .result-table tr:last-child td {
@@ -832,14 +994,42 @@ main {
 
 /* 页脚样式 */
 footer {
-    background-color: var(--primary-dark);
+    background: linear-gradient(45deg, var(--primary-dark) 0%, #1a1a2e 100%); /* 渐变背景，向深色过渡 */
     color: rgba(255, 255, 255, 0.85);
     text-align: center;
-    padding: 20px 30px;
+    padding: 10px 35px; /* 进一步减小内边距，使高度更小 */
     font-size: 1rem;
     border-bottom-left-radius: 20px;
     border-bottom-right-radius: 20px;
-    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-primary);
+    border-top: 1px solid rgba(255, 255, 255, 0.2); /* 顶部边框 */
+    box-shadow: 
+        0 -8px 30px rgba(0, 0, 0, 0.5), /* 更深的阴影 */
+        0 0 25px var(--glow-primary); /* 更强的发光效果 */
+    position: relative; /* 为伪元素定位 */
+    overflow: hidden;
+    z-index: 10;
+    display: flex; /* 启用flexbox */
+    flex-direction: column; /* 垂直堆叠内容 */
+    justify-content: center; /* 垂直居中 */
+    align-items: center; /* 水平居中 */
+}
+
+footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.03) 75%, transparent 75%, transparent);
+    background-size: 40px 40px; /* 增大图案 */
+    opacity: 0.1; /* 降低透明度 */
+    z-index: 1;
+    pointer-events: none;
+}
+
+footer > * {
+    margin: 0; /* 移除页脚内部元素的默认外边距 */
 }
 
 /* 通知消息样式 */
@@ -852,7 +1042,9 @@ footer {
     color: white;
     padding: 18px 30px;
     border-radius: 12px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px var(--glow-accent);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.4), /* 阴影 */
+        0 0 15px var(--glow-accent); /* 发光 */
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
@@ -869,23 +1061,31 @@ footer {
 
 .notification.info {
     background-color: #2196F3;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(33, 150, 243, 0.6);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.4), /* 阴影 */
+        0 0 15px rgba(33, 150, 243, 0.6); /* 发光 */
 }
 
 .notification.success {
     background-color: #4CAF50;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(76, 175, 80, 0.6);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.4), /* 阴影 */
+        0 0 15px rgba(76, 175, 80, 0.6); /* 发光 */
 }
 
 .notification.warning {
     background-color: #FFC107;
     color: #333;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 193, 7, 0.6);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.4), /* 阴影 */
+        0 0 15px rgba(255, 193, 7, 0.6); /* 发光 */
 }
 
 .notification.error {
     background-color: #F44336;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(244, 67, 54, 0.6);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.4), /* 阴影 */
+        0 0 15px rgba(244, 67, 54, 0.6); /* 发光 */
 }
 
 /* 正在输入指示器 */
@@ -1108,7 +1308,9 @@ footer {
     margin-top: 15px;
     border-radius: 10px; /* 更圆润 */
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px rgba(255, 255, 255, 0.1); /* 柔和阴影和微光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.2), /* 柔和阴影 */
+        0 0 10px rgba(255, 255, 255, 0.1); /* 微光 */
     background-color: rgba(255, 255, 255, 0.08); /* 半透明背景 */
 }
 
@@ -1166,7 +1368,9 @@ footer {
     padding: 25px;
     margin-top: 25px;
     text-align: center;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-accent); /* 阴影和发光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 阴影 */
+        0 0 10px var(--glow-accent); /* 发光 */
     animation: fadeIn 0.5s ease-out;
 }
 
@@ -1191,30 +1395,61 @@ footer {
     font-size: 1rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px var(--glow-primary); /* 阴影和发光 */
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 增强阴影 */
+        0 0 10px var(--glow-primary); /* 增强发光 */
     font-weight: 600;
 }
 
 .redirect-btn.yes {
     background: linear-gradient(45deg, #4CAF50, #2E7D32);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px rgba(76, 175, 80, 0.5);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 增强阴影 */
+        0 0 10px rgba(76, 175, 80, 0.6); /* 增强发光 */
 }
 
 .redirect-btn.no {
     background: linear-gradient(45deg, #F44336, #D32F2F);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 5px rgba(244, 67, 54, 0.5);
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3), /* 增强阴影 */
+        0 0 10px rgba(244, 67, 54, 0.6); /* 增强发光 */
 }
 
 .redirect-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px var(--glow-primary);
+    opacity: 1;
+    transform: translateY(-3px); /* 悬浮效果更明显 */
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.4), /* 悬停时更深阴影 */
+        0 0 15px var(--glow-primary); /* 悬停时更强发光 */
 }
 
 .redirect-btn.yes:hover {
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(76, 175, 80, 0.7);
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.4), /* 悬停时更深阴影 */
+        0 0 15px rgba(76, 175, 80, 0.8); /* 悬停时更强发光 */
 }
 
 .redirect-btn.no:hover {
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(244, 67, 54, 0.7);
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.4), /* 悬停时更深阴影 */
+        0 0 15px rgba(244, 67, 54, 0.8); /* 悬停时更强发光 */
+}
+
+.redirect-btn:active {
+    transform: translateY(0);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2), /* 点击时阴影 */
+        0 0 5px var(--glow-primary); /* 点击时发光 */
+}
+
+.redirect-btn.yes:active {
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2), /* 点击时阴影 */
+        0 0 5px rgba(76, 175, 80, 0.5); /* 点击时发光 */
+}
+
+.redirect-btn.no:active {
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2), /* 点击时阴影 */
+        0 0 5px rgba(244, 67, 54, 0.5); /* 点击时发光 */
 } 

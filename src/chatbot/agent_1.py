@@ -554,10 +554,10 @@ async def _find_status_and_download_if_ready(page: Page, context: BrowserContext
         return f"❌ 未能找到 Jira 工单 {jira_ticket} 对应的卡片。"
     
     try:
-        application_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("申请状态:")').first
+        application_status_locator = specific_item_container_locator.first.locator('span.custom-text:has-text("申请状态:")').first
         application_status = await application_status_locator.inner_text()
         try:
-            execution_status_locator = specific_item_container_locator.locator('span.custom-text:has-text("执行状态:")').first
+            execution_status_locator = specific_item_container_locator.first.locator('span.custom-text:has-text("执行状态:")').first
             if await execution_status_locator.is_visible(timeout=1000):
                 execution_status = await execution_status_locator.inner_text()
             else:
