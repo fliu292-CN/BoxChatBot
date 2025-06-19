@@ -16,10 +16,68 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from playwright.sync_api import (Browser, BrowserContext, Locator, Page,
                                   expect, sync_playwright, Playwright)
+from jira import JIRA
+
+# --- 模块 0: Jira 功能集成 ---
+# 初始化 Jira 客户端
+try:
+    jira_token = os.getenv("JIRA_TOKEN")
+    jira_server = os.getenv("JIRA_SERVER", "https://jira.veevadev.com/")
+    jiraOptions = {'server': jira_server}
+    if jira_token:
+        jira = JIRA(options=jiraOptions, token_auth=jira_token)
+        print("✅ Jira 客户端初始化成功。")
+    else:
+        jira = None
+        print("⚠️ 警告: JIRA_TOKEN 环境变量未设置。Jira 相关功能将不可用。")
+except Exception as e:
+    jira = None
+    print(f"❌ 错误: Jira 客户端初始化失败: {e}")
+
+def add_attachment(issue_key: str, file_path: str, replace_existing: bool = True) -> bool:
+    """
+    为指定的Jira issue添加附件。
+
+    Args:
+        issue_key (str): Jira issue的key，例如 'ORI-120579'
+        file_path (str): 要上传的文件路径
+        replace_existing (bool): 如果存在同名附件是否替换，默认True
+
+    Returns:
+        bool: 上传成功返回True，失败返回False
+    """
+    if not jira:
+        print("❌ Jira 功能不可用，无法上传附件。")
+        return False
+    try:
+        issue = jira.issue(issue_key)
+        print(f"   -> 找到Jira issue: {issue.key} ({issue.fields.summary})")
+
+        if not os.path.exists(file_path):
+            print(f"   -> ❌ 错误: 文件不存在 - {file_path}")
+            return False
+
+        filename = os.path.basename(file_path)
+
+        if replace_existing:
+            for attachment in issue.fields.attachment or []:
+                if attachment.filename == filename:
+                    print(f"   -> 发现同名附件，正在删除: {filename}")
+                    jira.delete_attachment(attachment.id)
+                    break
+
+        print(f"   -> 正在上传新附件: {filename}...")
+        attachment = jira.add_attachment(issue=issue, attachment=file_path)
+        print(f"   -> ✅ 附件上传成功: {attachment.filename}")
+        return True
+
+    except Exception as e:
+        print(f"   -> ❌ 上传附件到Jira时出错: {e}")
+        return False
 
 # --- 模块 1: 核心业务逻辑 ---
 def _login_pegasus(p: Playwright, okta_push: str, username: str, password: str):
-    if not okta_push and okta_push == 'True':
+    if okta_push and okta_push == 'True':
        return _login_and_get_app_page(p,username,password)
     else:
         return _login_and_get_app_page_no_okta_push(p,username,password)
@@ -50,8 +108,6 @@ def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password:
         print("   -> 已点击 'Okta登陆CSMC系统' 按钮。")
         print("3. 检查是否需要填写用户名...")
         try:
-            # 最佳实践：先显式检查元素是否可见，再执行操作。
-            # 这比直接尝试 .fill() 更能避免复杂的等待问题。
             username_locator = app_page.locator('input[name="identifier"]')
             if username_locator.is_visible(timeout=1000):
                 username_locator.fill(username)
@@ -63,19 +119,16 @@ def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password:
             print("   -> 未在5秒内找到用户名输入框，跳过此步骤继续执行。")
 
         print("4. 正在填写密码...")
-        # 定位密码输入框并填充
         password_input_locator = app_page.locator('input[name="credentials.passcode"]')
         password_input_locator.wait_for(state="visible", timeout=60000)
         password_input_locator.fill(password)
         print("   -> 完成填写密码。")
 
         print("5. 正在点击 '验证' 按钮...")
-        # 定位并点击“验证”按钮
         verify_button_locator = app_page.get_by_role("button", name="Verify").or_(app_page.get_by_role("button", name="验证"))
         verify_button_locator.click(timeout=30000)
         print("   -> 已点击 '验证' 按钮。")
 
-        # 等待登录后跳转到目标 URL
         print(f"6. 等待导航至 Veeva 目标页面: {veeva_initial_logged_in_page_url}")
         app_page.wait_for_url(veeva_initial_logged_in_page_url, timeout=60000)
 
@@ -83,23 +136,18 @@ def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, password:
         app_page.wait_for_load_state("networkidle", timeout=60000)
         print("✅ 应用页面已完全加载。")
 
-        # 成功后返回所需的对象
         return app_page, context, browser
 
     except Exception as e:
-        # 错误处理
         print(f"登录过程中发生严重错误: {e}")
-        # 保存截图以供调试
         screenshot_path = "playwright_login_error.png"
         app_page.screenshot(path=screenshot_path)
         print(f"已保存错误截图至: {screenshot_path}")
-        # 关闭浏览器以释放资源
         browser.close()
-        # 重新抛出异常，以便上层调用者知道登录失败
         raise
 
 
-# --- 模块 1.1: 浏览器和认证 (无改动) ---
+# --- 模块 1.1: 浏览器和认证 ---
 def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tuple[Page, BrowserContext, Browser]:
     """
     (内部辅助函数) 封装了完整的Web登录流程，并返回成功登录后的应用程序页面对象。
@@ -210,24 +258,17 @@ def generate_sql_query(natural_language_query: str) -> str:
     dynamic_schema_prompt_part = "\n".join([ALL_SCHEMAS[table] for table in relevant_tables])
     print(f"📋 正在为SQL生成构建动态Schema:\n---\n{dynamic_schema_prompt_part}\n---")
 
-    # --- Start of Updated Prompt ---
     sql_generation_prompt = ChatPromptTemplate.from_messages([
         ("system", """# 角色和目标
 你是一名顶级的SQL数据库专家。你的核心任务是根据我提供的【数据库表结构】和【上下文约束】，将我的【自然语言问题】精准地翻译成一个可以直接在数据库中执行的SQL查询语句。
-
----
 
 # 上下文约束
 1.  **单一客户环境**: 所有查询都默认在“一个”客户的环境中执行。因此，你生成的SQL不应包含任何试图查询、筛选或遍历多个客户的代码（例如 `customer_id IN (...)` 或 `GROUP BY customer_name`）。请将问题中的“客户”理解为当前操作的隐式环境。
 2.  **严格基于Schema**: 你的所有查询都必须严格使用下面【数据库表结构】中定义的表和列。绝不能虚构不存在的表名或列名。如果问题无法通过给定的Schema解答，请明确指出。
 
----
-
 # 数据库表结构 (Schema)
 -- 注意: 这里只提供了与用户问题最相关的表 --
 {schema}
-
----
 
 # 工作流程与规则
 1.  **理解意图**: 首先，仔细分析【自然语言问题】，识别出查询的核心意图（例如：查询数据、计数、聚合、查找关联信息等）。
@@ -243,14 +284,11 @@ def generate_sql_query(natural_language_query: str) -> str:
     * **人类可读的文本**: 当问题中提到需要“显示”或“筛选”用户可见的文本（如记录类型、状态、用户名、部门名）时，必须通过 `JOIN` 关联到对应的维度表，如果查询内容为中文，优先使用 label 字段进行筛选和显示。如果为英文，则优先使用 name 字段。
     * **时间处理**: 对日期和时间的描述（如“今天”、“本周”、“上个月”）要转换成精确的SQL日期函数和区间比较。
 
----
-
 # 输出格式
 * 直接返回最终的SQL查询语句。
 * **不要**添加任何额外的解释、注释或代码块标记（如 ```sql ... ```）。"""),
         ("user", "{query}")
     ])
-    # --- End of Updated Prompt ---
 
     sql_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
     chain = sql_generation_prompt | sql_llm | StrOutputParser()
@@ -493,10 +531,10 @@ def generate_report_from_data(data_string, chart_filename):
     print(f"柱状图已保存到文件: {chart_filename}")
 
 
-# --- 模块 1.4: 数据分析逻辑 ---
-def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> str:
+# --- 模块 1.4: 数据分析与 Jira 上传逻辑 ---
+def _analyze_excel_file_with_gemini(excel_path: str, jira_ticket: str, user_requirement: str) -> str:
     """
-    (内部辅助函数) 读取Excel文件，将其转换为JSON，然后调用Gemini API进行分析。
+    (内部辅助函数) 读取Excel文件，调用Gemini分析，然后将源文件和分析报告上传到Jira。
     """
     print(f"\n--- 正在使用 Gemini API 分析数据: {excel_path} ---")
     if not excel_path or not os.path.exists(excel_path):
@@ -516,7 +554,6 @@ def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> s
         data_string = json.dumps(json_compatible_dict, indent=2, ensure_ascii=False)
         print("✅ 数据已成功转换为JSON格式。")
 
-        #llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
         prompt_detail = _get_prompt_detail_by_user_requirement(user_requirement)
 
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
@@ -545,9 +582,37 @@ def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> s
             f.write(analysis_result)
         print(f"✅ Gemini 分析结果已保存到 '{report_filename}'")
         
-        generate_report_from_data(analysis_result, f"Gemini分析报告_{os.path.basename(excel_path).replace('.xlsx', '.png')}")
+        image_filename = f"Gemini分析报告_{os.path.basename(excel_path).replace('.xlsx', '.png')}"
+        generate_report_from_data(analysis_result, image_filename)
 
-        return f"📊 分析完成！结果如下：\n\n{analysis_result}\n\n报告也已保存到文件 '{report_filename}'。"
+        # --- 新增: 上传到 Jira ---
+        print(f"\n📎 开始将文件上传到 Jira 工单: {jira_ticket}")
+        source_uploaded = add_attachment(jira_ticket, excel_path)
+        report_uploaded = add_attachment(jira_ticket, report_filename)
+        image_uploaded = add_attachment(jira_ticket, image_filename)
+        
+        upload_summary = []
+        if source_uploaded:
+            upload_summary.append(f"源数据文件 '{os.path.basename(excel_path)}'")
+        else:
+            upload_summary.append(f"源数据文件上传失败")
+        
+        if report_uploaded:
+            upload_summary.append(f"分析报告 '{report_filename}'")
+        else:
+            upload_summary.append(f"分析报告上传失败")
+
+        if image_uploaded:
+            upload_summary.append(f"分析图表 '{image_filename}'")
+        else:
+            upload_summary.append(f"分析图表上传失败")
+
+        final_message = (
+            f"📊 分析完成！结果如下：\n\n{analysis_result}\n\n"
+            f"Jira 上传状态: { ' 和 '.join(upload_summary) } 已上传至工单 {jira_ticket}。"
+        )
+        return final_message
+
     except Exception as e:
         error_message = f"❌ 数据分析或API调用过程中发生错误: {e}"
         print(error_message)
@@ -583,7 +648,7 @@ def _perform_browser_action(action_callable: callable, **action_kwargs) -> str:
     
     return result
 
-# --- 步骤 2: 定义 LangChain 工具 (已更新为中文) ---
+# --- 步骤 2: 定义 LangChain 工具 (已更新) ---
 @tool
 def process_data_request(jira_ticket: str, approver: str, data_query_description: str) -> str:
     """
@@ -632,24 +697,30 @@ def check_jira_status_and_download(jira_ticket: str) -> str:
     return result
 
 @tool
-def analyze_report_file(file_path: str) -> str:
+def analyze_report_file_and_upload(file_path: str, jira_ticket: str) -> str:
     """
-    使用此工具来【分析】一个已经通过 'check_jira_status_and_download' 工具下载到本地的数据报告文件。
-    你需要提供要分析的文件的【完整文件名】或【路径】。
+    使用此工具来【分析】一个已下载的数据报告文件，并将【源文件和分析报告】上传到关联的Jira工单。
+    你需要提供要分析的文件的【路径】和对应的【Jira工单号】。
     参数:
         file_path (str): 本地数据文件的路径 (例如 'Veeva_Report_ORI-12345.xlsx')。
+        jira_ticket (str): 与此报告关联的Jira工单号 (例如 'ORI-12345')。
     """
-    print(f"🚀 开始执行文件【分析】流程，文件: {file_path}...")
-    result = _analyze_excel_file_with_gemini(file_path, '统计结果')
+    print(f"🚀 开始执行文件【分析与上传】流程，文件: {file_path}, Jira工单: {jira_ticket}...")
+    result = _analyze_excel_file_with_gemini(excel_path=file_path, jira_ticket=jira_ticket, user_requirement='统计结果')
     return result
 
-# --- 步骤 3: 设置并运行 Agent (已更新为中文) ---
+# --- 步骤 3: 设置并运行 Agent (已更新) ---
 def main():
     """主执行函数，以交互式聊天机器人模式运行。"""
     load_dotenv()
+    # 确保JIRA_TOKEN环境变量被加载
+    if not os.getenv("JIRA_TOKEN"):
+        print("❌ 致命错误: JIRA_TOKEN 环境变量未设置。程序无法继续。")
+        return
+        
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, model_kwargs={"response_mime_type": "application/json"})
     
-    tools = [process_data_request, check_jira_status_and_download, analyze_report_file]
+    tools = [process_data_request, check_jira_status_and_download, analyze_report_file_and_upload]
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -658,12 +729,12 @@ def main():
 你有三个可用的工具:
 1.  `process_data_request`: 用于【提交新的数据查询申请】。需要 `jira_ticket`, `approver`, 和 `data_query_description`。
 2.  `check_jira_status_and_download`: 用于【查询已提交工单的状态】并【自动下载】结果文件（如果准备就绪）。只需要 `jira_ticket`。下载成功后，务必告知用户文件名，并提醒他们可以请求分析。
-3.  `analyze_report_file`: 用于【分析已下载的文件】。需要 `file_path`。
+3.  `analyze_report_file_and_upload`: 用于【分析已下载的文件】并将结果【上传到Jira】。需要 `file_path` 和 `jira_ticket`。
 
 请仔细识别用户的意图：
 -   如果用户想【提交】或【发起】新请求 -> 使用 `process_data_request`。
 -   如果用户想【查询状态】或【检查进度】 -> 使用 `check_jira_status_and_download`。
--   如果用户在下载文件后想【分析】或【查看报告】 -> 使用 `analyze_report_file`。"""),
+-   如果用户在下载文件后想【分析】或【查看报告】 -> 使用 `analyze_report_file_and_upload`。分析时必须提供文件名和它所属的Jira单号。"""),
             ("user", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
         ]
@@ -684,8 +755,8 @@ def main():
 --- 2. 查询状态与下载 ---
 '嘿，帮我查一下 ORI-120624 这个单子的状态。'
 
---- 3. 分析已下载的文件 ---
-'好的，请帮我分析一下刚才下载的 Veeva_Report_ORI-120624.xlsx 文件。'
+--- 3. 分析文件并上传至Jira ---
+'好的，请帮我分析一下刚才下载的 Veeva_Report_ORI-120624.xlsx 文件，并把结果传到 ORI-120624 这个单子里。'
 """
     print(example)
     print("="*60)
