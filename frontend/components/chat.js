@@ -213,22 +213,14 @@
             
             // 重新组合所有处理过的行，注意这里不再简单地用<br>连接所有，
             // 而是确保表格结构和非表格内容正确混合。
-            formatted = tableHtmlParts.join(''); // 临时使用空字符串连接，因为<br>已经在行中
-            
-            // 再次将<br>替换回换行符，因为后续处理如加粗斜体不需要HTML换行符
-            formatted = formatted.replace(/<br>/g, '\n');
-
-            // 处理加粗文本 (使用非贪婪匹配)
-            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            
-            // 处理斜体文本 (使用非贪婪匹配)
-            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
-            // 最后，将所有换行符转换为<p>标签或<br>标签，确保文本的块级显示和换行
-            // 更复杂的处理可以考虑将段落包裹在<p>中，这里简单转换为<br>
-            formatted = formatted.split('\n').map(p => `<p>${p}</p>`).join('');
-            formatted = formatted.replace(/<p><\/p>/g, '<br>'); // 将空段落转换回换行
+            formatted = tableHtmlParts.join('');
         }
+
+        // 处理加粗文本 (使用非贪婪匹配)
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        // 处理斜体文本 (使用非贪婪匹配)
+        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
         
         // 新增：处理下载成功消息并生成下载链接
         const downloadSuccessPattern = /🎉 操作完成！Jira 工单 (.*?) 的文件已成功下载为 '(.*?)'。你可以通过新指令要求我分析这个文件。/;
