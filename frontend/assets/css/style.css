@@ -135,17 +135,19 @@ nav a.active::after, nav a.tab-link.active::after {
     height: 2px;
     background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
     box-shadow: 0 0 10px var(--primary-light);
-    animation: glow 1.5s ease-in-out infinite alternate;
+    /* 移除或简化此动画，以防止闪烁 */
+    /* animation: glow 1.5s ease-in-out infinite alternate; */
 }
 
-@keyframes glow {
+/* 注释或移除@keyframes glow，因为它不再被使用 */
+/* @keyframes glow {
     from {
         box-shadow: 0 0 5px var(--primary-light);
     }
     to {
         box-shadow: 0 0 15px var(--primary-color);
     }
-}
+} */
 
 nav a:hover, nav a.tab-link:hover {
     color: var(--primary-color);

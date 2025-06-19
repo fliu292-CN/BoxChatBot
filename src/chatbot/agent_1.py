@@ -26,25 +26,39 @@ _app_page_instance: Optional[Page] = None
 async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
     global _playwright_instance, _browser_instance, _context_instance, _app_page_instance
 
-    # Add try-except around is_connected() check
-    try:
-        # Check if the page instance is connected and also if the browser is connected
-        if _app_page_instance and _app_page_instance.is_connected() and \
-           _browser_instance and _browser_instance.is_connected():
-            print("💡 Reusing existing browser session.")
-            return _app_page_instance, _context_instance, _browser_instance
-        else:
-            # If not connected, or if any of them are None, print a message and proceed to re-initialize
-            print("⚠️ Existing browser session is not connected or invalid, re-initializing.")
-            # Ensure all global instances are cleared before re-initialization
-            await close_browser_session() # Explicitly close and clear globals
-    except Exception as e:
-        print(f"❌ Error checking existing browser session: {e}. Re-initializing.")
-        # If an error occurs during the check (e.g., 'Page' object has no attribute 'is_connected'),
-        # assume the session is bad and re-initialize.
-        await close_browser_session() # Explicitly close and clear globals
+    async def is_session_truly_connected() -> bool:
+        try:
+            # Check if all global instances are not None
+            if not all([_playwright_instance, _browser_instance, _context_instance, _app_page_instance]):
+                print("DEBUG: One or more global Playwright instances are None.")
+                return False
 
+            # Check if they are indeed Playwright objects and are connected
+            if (isinstance(_playwright_instance, Playwright) and
+                isinstance(_browser_instance, Browser) and
+                isinstance(_context_instance, BrowserContext) and
+                isinstance(_app_page_instance, Page) and
+                _browser_instance.is_connected() and
+                _app_page_instance.is_connected()):
+                print("DEBUG: All Playwright instances are valid and connected.")
+                return True
+            else:
+                print("DEBUG: Playwright instances are not of expected types or reported as not connected.")
+                return False
+        except Exception as e:
+            # Catch any exception during the connection check, including AttributeError
+            print(f"❌ Error during browser session validation (is_session_truly_connected): {e}")
+            return False
 
+    if await is_session_truly_connected():
+        print("💡 Reusing existing browser session.")
+        return _app_page_instance, _context_instance, _browser_instance
+    else:
+        print("⚠️ Existing browser session is invalid or not fully connected, re-initializing.")
+        # Ensure full cleanup before re-initialization
+        await close_browser_session()
+
+    # Re-initialization logic
     username = os.getenv("VEEVA_USERNAME")
     password = os.getenv("VEEVA_PASSWORD")
     okta_push = os.getenv("OKTA_PUSH")
@@ -61,20 +75,30 @@ async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
     except Exception as e:
         print(f"❌ Failed to initialize new browser session or login: {e}")
         # Ensure cleanup if login fails
-        await close_browser_session()
+        await close_browser_session() # This is critical to reset globals on failed login
         raise # Re-raise the exception after cleanup
 
 async def close_browser_session():
     global _playwright_instance, _browser_instance, _context_instance, _app_page_instance
-    if _browser_instance and _browser_instance.is_connected():
-        print("🚪 Closing browser session...")
-        await _browser_instance.close()
-    if _playwright_instance:
-        await _playwright_instance.stop()
-    _playwright_instance = None
-    _browser_instance = None
-    _context_instance = None
-    _app_page_instance = None
+    print("🚪 Closing browser session...")
+    try:
+        if _browser_instance and _browser_instance.is_connected():
+            print("   -> Browser is connected, closing.")
+            await _browser_instance.close()
+        elif _browser_instance:
+            print("   -> Browser instance exists but not connected, no explicit close needed.")
+        if _playwright_instance:
+            print("   -> Stopping Playwright instance.")
+            await _playwright_instance.stop()
+    except Exception as e:
+        print(f"❌ Error during browser session close: {e}")
+    finally:
+        # Always ensure global instances are nulled out
+        _playwright_instance = None
+        _browser_instance = None
+        _context_instance = None
+        _app_page_instance = None
+        print("🚪 Browser session globals cleared.")
 
 # --- 模块 1: 核心业务逻辑 ---
 async def _login_pegasus(p: Playwright, okta_push: str, username: str, password: str):
