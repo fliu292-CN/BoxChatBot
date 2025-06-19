@@ -6,6 +6,8 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg') # Use the Agg backend for non-interactive plotting
 import matplotlib.pyplot as plt
 import io
 from urllib.parse import urljoin
@@ -738,7 +740,7 @@ def _analyze_excel_file_with_gemini(excel_path: str, jira_ticket: str, user_requ
 
 ## 核心分析逻辑与规则
 你需要**遍历顶层 JSON 对象的每一个键值对（即每一个客户）**，并对每个客户的数据执行以下操作：
-1.  **读取工作表**：JSON 对象的键本身就是“客户名称”，并加载其数据内容。
+1.  **读取工作表**：JSON 对象的键本身就是"客户名称"，并加载其数据内容。
 {dynamic_prompt}
 """),
            ("human", "你好，请帮我分析以下业务数据。\n\n数据如下:\n---\n{data_as_string}\n---\n\n")
@@ -996,10 +998,10 @@ async def get_agent_executor() -> AgentExecutor:
 -   如果用户想【提交】或【发起】新请求 -> 使用 `process_data_request`。
 -   如果用户想【查询状态】或【检查进度】 -> 使用 `check_jira_status_and_download`。
 -   如果用户在下载文件后想【分析】或【查看报告】 -> 使用 `analyze_report_file_and_upload`。分析时必须提供文件名和它所属的Jira单号。"""),
-            ("user", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ]
-    )
+                ("user", "{input}"),
+                ("placeholder", "{agent_scratchpad}"),
+            ]
+        )
 
         _global_agent_executor = AgentExecutor(agent=create_tool_calling_agent(llm, tools, prompt), tools=tools, verbose=True)
         print("✅ LangChain Agent 初始化完成。")
