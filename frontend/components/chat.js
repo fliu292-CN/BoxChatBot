@@ -108,6 +108,35 @@
         // 处理消息内容（支持简单的markdown格式）
         const formattedText = formatMessageText(text);
         contentDiv.innerHTML = formattedText;
+
+        // NEW: 检查是否包含特定的报告文件，并添加下载链接
+        const reportFilename = 'Gemini分析报告_qing.tang@veeva.com_d58756cc397d4bde921c38b96f664f1a.csv';
+        if (text.includes(reportFilename)) {
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/download-report/${reportFilename}`;
+            downloadLink.textContent = `点击下载 ${reportFilename}`;
+            downloadLink.download = reportFilename; // 提示浏览器下载文件而不是导航
+            downloadLink.style.display = 'block'; // 确保链接独占一行或在新行显示
+            downloadLink.style.marginTop = '10px';
+            downloadLink.style.color = '#007bff';
+            downloadLink.style.textDecoration = 'underline';
+
+            // 找到包含文件名的段落，并在其下方添加下载链接
+            const paragraphs = contentDiv.querySelectorAll('p');
+            let foundParagraph = false;
+            for (const p of paragraphs) {
+                if (p.textContent.includes(reportFilename)) {
+                    p.appendChild(document.createElement('br')); // Add a line break before the link
+                    p.appendChild(downloadLink);
+                    foundParagraph = true;
+                    break;
+                }
+            }
+            // If for some reason the filename wasn't in a <p> tag, append to contentDiv directly
+            if (!foundParagraph) {
+                contentDiv.appendChild(downloadLink);
+            }
+        }
         
         // 组装消息
         messageDiv.appendChild(avatarDiv);

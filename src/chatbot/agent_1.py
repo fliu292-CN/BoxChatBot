@@ -2,6 +2,7 @@ import os
 import re
 import json
 from typing import Tuple, Optional
+from pathlib import Path
 
 import httpx
 import pandas as pd
@@ -16,12 +17,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from playwright.async_api import (Browser, BrowserContext, Locator, Page,
                                   expect, async_playwright, Playwright)
+import asyncio # 新增或确保存在
 
 # Global variables to hold the Playwright instances
 _playwright_instance: Optional[Playwright] = None
 _browser_instance: Optional[Browser] = None
 _context_instance: Optional[BrowserContext] = None
 _app_page_instance: Optional[Page] = None
+
+# 定义会话状态文件路径
+SESSION_STATE_PATH = Path("./playwright_session_state.json")
 
 async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
     global _playwright_instance, _browser_instance, _context_instance, _app_page_instance
@@ -30,20 +35,66 @@ async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
         try:
             # Check if all global instances are not None
             if not all([_playwright_instance, _browser_instance, _context_instance, _app_page_instance]):
-                print("DEBUG: One or more global Playwright instances are None.")
+                print("DEBUG: One or more global Playwright instances are None. Cannot reuse session.")
+                # Log which specific instance is None
+                if _playwright_instance is None: print("DEBUG: _playwright_instance is None")
+                if _browser_instance is None: print("DEBUG: _browser_instance is None")
+                if _context_instance is None: print("DEBUG: _context_instance is None")
+                if _app_page_instance is None: print("DEBUG: _app_page_instance is None")
                 return False
 
             # Check if they are indeed Playwright objects and are connected
-            if (isinstance(_playwright_instance, Playwright) and
-                isinstance(_browser_instance, Browser) and
-                isinstance(_context_instance, BrowserContext) and
-                isinstance(_app_page_instance, Page) and
-                _browser_instance.is_connected() and
-                _app_page_instance.is_connected()):
+            is_playwright_instance = isinstance(_playwright_instance, Playwright)
+            is_browser_instance = isinstance(_browser_instance, Browser)
+            is_context_instance = isinstance(_context_instance, BrowserContext)
+            is_page_instance = isinstance(_app_page_instance, Page)
+
+            browser_connected = False
+            page_connected = False
+            page_functional = False # New flag for page functionality
+
+            if is_browser_instance: 
+                try:
+                    browser_connected = _browser_instance.is_connected()
+                    print(f"DEBUG: _browser_instance.is_connected() returned: {browser_connected}")
+                except Exception as e:
+                    print(f"❌ Error calling _browser_instance.is_connected(): {e}")
+                    browser_connected = False
+            else:
+                print(f"DEBUG: _browser_instance is not a Browser instance (Type: {type(_browser_instance)}).")
+
+            if is_page_instance: 
+                try:
+                    # Removed direct call to _app_page_instance.is_connected() due to AttributeError
+                    # Relying on page_functional check below for actual page health
+                    page_connected = True # Assume connected if it's a Page instance
+
+                    # Additional check: Try a simple operation to ensure the page is functional
+                    try:
+                        await _app_page_instance.evaluate("1 + 1") # Simple JS evaluation to check functionality
+                        page_functional = True
+                        print("DEBUG: _app_page_instance is functional.")
+                    except Exception as e:
+                        print(f"❌ Error evaluating simple JS on _app_page_instance: {e}. Page not functional.")
+                        page_functional = False
+                except Exception as e:
+                    # This block now primarily catches errors from the evaluate call itself, not is_connected()
+                    print(f"❌ Error during page functionality check (evaluating 1+1): {e}")
+                    page_functional = False # Mark as not functional if any error occurs here
+            else:
+                print(f"DEBUG: _app_page_instance is not a Page instance (Type: {type(_app_page_instance)}). Marking as not functional.")
+                page_functional = False
+
+            if (is_playwright_instance and
+                is_browser_instance and
+                is_context_instance and
+                is_page_instance and
+                browser_connected and
+                page_functional): # Rely solely on page_functional for page's validity
                 print("DEBUG: All Playwright instances are valid and connected.")
                 return True
             else:
-                print("DEBUG: Playwright instances are not of expected types or reported as not connected.")
+                print("DEBUG: Playwright instances are not of expected types or reported as not connected (Detail above). Force re-initialization.")
                 return False
         except Exception as e:
             # Catch any exception during the connection check, including AttributeError
@@ -59,6 +110,35 @@ async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
         await close_browser_session()
 
     # Re-initialization logic
+    # 尝试从保存的状态加载，而不是重新登录
+    if SESSION_STATE_PATH.exists():
+        print("Attempting to load browser session from saved state...")
+        try:
+            _playwright_instance = await async_playwright().start()
+            _browser_instance = await _playwright_instance.chromium.launch(headless=False)
+            _context_instance = await _browser_instance.new_context(storage_state=SESSION_STATE_PATH)
+            _app_page_instance = await _context_instance.new_page()
+            
+            # NEW: Navigate to the expected application URL to ensure the page is active and ready
+            veeva_initial_logged_in_page_url = 'https://pegasus-prod.veevasfa.com/environment/list'
+            print(f"DEBUG: Navigating to {veeva_initial_logged_in_page_url} after loading session state.")
+            await _app_page_instance.goto(veeva_initial_logged_in_page_url, timeout=60000)
+            await _app_page_instance.wait_for_load_state('networkidle', timeout=60000)
+            
+            # After loading, immediately validate the session
+            if await is_session_truly_connected(): # Re-validate loaded session
+                print("✅ Browser session loaded from saved state and validated.")
+                return _app_page_instance, _context_instance, _browser_instance
+            else:
+                print("❌ Loaded browser session is invalid or not functional, falling back to full login.")
+                await close_browser_session() # Clean up invalid loaded session
+                # Fall through to full login
+        except Exception as e:
+            print(f"❌ Failed to load browser session from saved state: {e}. Falling back to full login.")
+            # Clean up potentially partially initialized instances
+            await close_browser_session()
+            # Do not re-raise here, let it fall through to full login
+
     username = os.getenv("VEEVA_USERNAME")
     password = os.getenv("VEEVA_PASSWORD")
     okta_push = os.getenv("OKTA_PUSH")
@@ -70,7 +150,11 @@ async def get_browser_session() -> Tuple[Page, BrowserContext, Browser]:
     try:
         _playwright_instance = await async_playwright().start()
         _app_page_instance, _context_instance, _browser_instance = await _login_pegasus(_playwright_instance, okta_push, username, password)
-        print("✅ New browser session initialized and logged in.")
+        
+        # 在成功登录后保存会话状态
+        await _context_instance.storage_state(path=SESSION_STATE_PATH)
+        print(f"✅ New browser session initialized and logged in. Session state saved to {SESSION_STATE_PATH}.")
+        
         return _app_page_instance, _context_instance, _browser_instance
     except Exception as e:
         print(f"❌ Failed to initialize new browser session or login: {e}")
@@ -115,7 +199,7 @@ async def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, pas
     它会填写密码并处理后续的验证步骤。
     Returns: 一个元组，包含成功登录后的 Page, BrowserContext, 和 Browser 对象。
     """
-    print("🚀 开始 Veeva 登录流程...")
+    print("🚀 开始登录流程...")
     # 以非无头模式启动浏览器，便于调试
     browser = await p.chromium.launch(headless=False, timeout=60000)
     context: BrowserContext = await browser.new_context()
@@ -130,41 +214,30 @@ async def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, pas
         # 等待按钮可见
         await app_page.wait_for_selector(okta_login_button_selector, state='visible', timeout=30000)
         await app_page.click(okta_login_button_selector)
-        print("   -> 已点击 'Okta登陆CSMC系统' 按钮。")
-        print("3. 检查是否需要填写用户名...")
         try:
             # 最佳实践：先显式检查元素是否可见，再执行操作。
             # 这比直接尝试 .fill() 更能避免复杂的等待问题。
             username_locator = app_page.locator('input[name="identifier"]')
             if await username_locator.is_visible(timeout=1000):
                 await username_locator.fill(username)
-                print("   -> 用户名填写完成。")
-            else:
-                print("   -> 用户名输入框存在但不可见，跳过此步骤。")
 
         except TimeoutError:
             print("   -> 未在5秒内找到用户名输入框，跳过此步骤继续执行。")
 
-        print("4. 正在填写密码...")
         # 定位密码输入框并填充
         password_input_locator = app_page.locator('input[name="credentials.passcode"]')
         await password_input_locator.wait_for(state="visible", timeout=60000)
         await password_input_locator.fill(password)
-        print("   -> 完成填写密码。")
 
-        print("5. 正在点击 '验证' 按钮...")
         # 定位并点击"验证"按钮
         verify_button_locator = app_page.get_by_role("button", name="Verify").or_(app_page.get_by_role("button", name="验证"))
         await verify_button_locator.click(timeout=30000)
-        print("   -> 已点击 '验证' 按钮。")
 
         # 等待登录后跳转到目标 URL
-        print(f"6. 等待导航至 Veeva 目标页面: {veeva_initial_logged_in_page_url}")
         await app_page.wait_for_url(veeva_initial_logged_in_page_url, timeout=60000)
 
         print(f"✅ 登录成功! 当前页面 URL: {app_page.url}")
         await app_page.wait_for_load_state("networkidle", timeout=60000)
-        print("✅ 应用页面已完全加载。")
 
         # 成功后返回所需的对象
         return app_page, context, browser
@@ -182,7 +255,6 @@ async def _login_and_get_app_page_no_okta_push(p: Playwright, username: str, pas
         raise
 
 
-# --- 模块 1.1: 浏览器和认证 (无改动) ---
 async def _login_and_get_app_page(p: Playwright, username: str, password: str) -> tuple[Page, BrowserContext, Browser]:
     """
     (内部辅助函数) 封装了完整的Web登录流程，并返回成功登录后的应用程序页面对象。
@@ -193,18 +265,14 @@ async def _login_and_get_app_page(p: Playwright, username: str, password: str) -
     page: Page = await context.new_page()
 
     login_url = "https://veevasys.okta.com/"
-    print(f"➡️  正在导航至登录页面: {login_url}")
     await page.goto(login_url, timeout=60000)
 
-    print("📝 正在填写用户名...")
     await page.locator('input[name="identifier"]').fill(username)
 
-    print("📝 正在填写密码...")
     password_input = page.locator('input[name="credentials.passcode"]')
     await password_input.wait_for(state="visible", timeout=10000)
     await password_input.fill(password)
 
-    print("🖱️  正在点击登录按钮...")
     await page.locator('input[type="submit"]').click()
 
     print("📱 正在等待 Okta Verify Push 选项...")
@@ -218,9 +286,8 @@ async def _login_and_get_app_page(p: Playwright, username: str, password: str) -
         await page.get_by_label("launch app Pegasus").click()
 
     app_page: Page = new_page_info.value
-    print(f"✅ 成功切换到新的应用页面! URL: {app_page.url}")
+    print(f"✅ 登录成功! 当前页面 URL: {app_page.url}")
     await app_page.wait_for_load_state("networkidle", timeout=60000)
-    print("✅ 应用页面已完全加载。")
 
     return app_page, context, browser
 
@@ -232,11 +299,9 @@ def _load_all_schemas(file_path: str = "schemas.json") -> dict:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     absolute_file_path = os.path.join(script_dir, file_path)
     
-    print(f"📄 正在从 {absolute_file_path} 加载表结构...")
     try:
         with open(absolute_file_path, 'r', encoding='utf-8') as f:
             schemas = json.load(f)
-            print(f"✅ 成功加载 {len(schemas)} 个表结构。")
             return schemas
     except FileNotFoundError:
         print(f"❌ 错误: Schema文件 '{absolute_file_path}' 未找到。")
@@ -392,25 +457,22 @@ async def download_file_from_veeva(url: str, headers: dict, output_filename: str
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.get(url, headers=headers, follow_redirects=True)
-            response.raise_for_status()
-            if 'Content-Disposition' in response.headers:
-                content_disposition = response.headers['Content-Disposition']
-                filename_match = re.search(r'filename\*?=(?:UTF-8\'\')?\"?([^\";]+)\"?', content_disposition)
-                if filename_match:
-                    suggested_filename_raw = filename_match.group(1).strip()
-                    try:
-                        # httpx 不需要 requests.utils.unquote，可以直接使用
-                        suggested_filename = suggested_filename_raw # httpx会自动处理url编码，这里不再需要requests.utils.unquote
-                        if suggested_filename:
-                            output_filename = suggested_filename
-                            print(f"ℹ️  根据服务器建议，文件将保存为: {output_filename}")
-                    except Exception:
-                        pass
-            with open(output_filename, 'wb') as f:
-                async for chunk in response.aiter_bytes():
-                    f.write(chunk)
-            print(f"✅ 文件 '{output_filename}' 下载成功！")
-            return output_filename
+        response.raise_for_status()
+        if 'Content-Disposition' in response.headers:
+            content_disposition = response.headers['Content-Disposition']
+            filename_match = re.search(r'filename\*?=(?:UTF-8\'\')?\"?([^\";]+)\"?', content_disposition)
+            if filename_match:
+                suggested_filename_raw = filename_match.group(1).strip()
+                # httpx 不需要 requests.utils.unquote，可以直接使用
+                suggested_filename = suggested_filename_raw # httpx会自动处理url编码，这里不再需要requests.utils.unquote
+                if suggested_filename:
+                    output_filename = suggested_filename # Override if a suggested filename is found
+                    print(f"ℹ️  根据服务器建议，文件将保存为: {output_filename}")
+        with open(output_filename, 'wb') as f:
+            async for chunk in response.aiter_bytes():
+                f.write(chunk)
+        print(f"✅ 文件 '{output_filename}' 下载成功！")
+        return output_filename
     except httpx.RequestError as e:
         error_msg = f"❌ 文件下载失败: {e}"
         print(error_msg)
@@ -632,7 +694,7 @@ def _analyze_excel_file_with_gemini(excel_path: str, user_requirement: str) -> s
         print(f"✅ Gemini 分析结果已保存到 '{report_filename}'")
         
         generate_report_from_data(analysis_result, f"Gemini分析报告_{os.path.basename(excel_path).replace('.xlsx', '.png')}")
-
+        
         return f"📊 分析完成！结果如下：\n\n{analysis_result}\n\n报告也已保存到文件 '{report_filename}'。"
     except Exception as e:
         error_message = f"❌ 数据分析或API调用过程中发生错误: {e}"
@@ -706,7 +768,7 @@ async def check_jira_status_and_download(jira_ticket: str) -> str:
     return result
 
 @tool
-def analyze_report_file(file_path: str) -> str:
+async def analyze_report_file(file_path: str) -> str:
     """
     使用此工具来【分析】一个已经通过 'check_jira_status_and_download' 工具下载到本地的数据报告文件。
     你需要提供要分析的文件的【完整文件名】或【路径】。
@@ -714,7 +776,8 @@ def analyze_report_file(file_path: str) -> str:
         file_path (str): 本地数据文件的路径 (例如 'Veeva_Report_ORI-12345.xlsx')。
     """
     print(f"🚀 开始执行文件【分析】流程，文件: {file_path}...")
-    result = _analyze_excel_file_with_gemini(file_path, '统计结果')
+    # 将同步的分析操作放到单独的线程中执行，避免阻塞事件循环
+    result = await asyncio.to_thread(_analyze_excel_file_with_gemini, file_path, '统计结果')
     return result
 
 # --- 步骤 3: 设置并运行 Agent (已更新为中文) ---

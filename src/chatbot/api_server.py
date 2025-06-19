@@ -543,6 +543,16 @@ if FRONTEND_DIR.exists():
     app.mount("/", NoCacheStaticFiles(directory=FRONTEND_DIR, html=True), name="static")
     print(f"前端静态文件已挂载，路径: {FRONTEND_DIR}，已禁用缓存")
 
+# 添加文件下载端点
+@app.get("/download-report/{filename}")
+async def download_report(filename: str):
+    file_path = os.path.join("./src/chatbot", filename)  # 假设文件在 src/chatbot 目录下
+    if os.path.exists(file_path):
+        return FileResponse(path=file_path, filename=filename, media_type="application/octet-stream")
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
 if __name__ == "__main__":
-    print(f"API服务器启动中... 访问 http://localhost:8000/ 查看前端界面")
-    uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=True) 
+    # 确保不使用uvicorn的热重载，以维持Playwright会话的持久性
+    print("🚀 API服务器启动中... 访问 http://localhost:8000/ 查看前端界面")
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
