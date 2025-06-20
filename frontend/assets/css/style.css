@@ -17,11 +17,11 @@ html {
 body {
     /* height: 100%; */ /* 移除，让内容决定高度 */
     /* min-height: 100vh; */ /* 移除，让内容决定高度 */
-    display: flex; /* 设为flex容器 */
-    flex-direction: column; /* 垂直堆叠 */
+    /* display: flex; */ /* 设为flex容器 */
+    /* flex-direction: column; */ /* 垂直堆叠 */
     font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     color: var(--text-primary);
-    background-color: #1a1a2e; /* 深蓝色背景，更具科技感 */
+    background-color: #101018; /* 稍微深一点的背景，更好地凸显图片文字 */
     line-height: 1.65;
     font-size: 16px;
 }
@@ -78,12 +78,42 @@ body::before {
     100% { opacity: 0.8; }
 }
 
+.left-panel-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 50vw; /* 占据视口宽度的一半 */
+    height: 100vh; /* 占据整个视口高度 */
+    background-image: url('../img/introduce.png');
+    background-repeat: no-repeat;
+    background-position: center left; /* 图片在左侧居中 */
+    background-size: contain; /* 确保图片完整显示 */
+    opacity: 0.3; /* 增加透明度，使其更明显 */
+    z-index: -1; /* 确保在内容之下 */
+    pointer-events: none; /* 允许点击穿透 */
+}
+
+.right-panel-background {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 50vw; /* 占据视口宽度的一半 */
+    height: 100vh; /* 占据整个视口高度 */
+    background-image: url('../img/introduce-right.jpg');
+    background-repeat: no-repeat;
+    background-position: center right; /* 图片在右侧居中 */
+    background-size: contain; /* 确保图片完整显示 */
+    opacity: 0.3; /* 增加透明度，使其更明显 */
+    z-index: -1; /* 确保在内容之下 */
+    pointer-events: none; /* 允许点击穿透 */
+}
+
 .app-container {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 1000px;
-    margin: 0 auto;
+    max-width: 1000px; /* 保持最大宽度 */
+    margin: 0 auto; /* 居中 */
     background-color: rgba(255, 255, 255, 0.05); /* 半透明背景 */
     box-shadow: 
         0 10px 40px rgba(0, 0, 0, 0.4), /* 主阴影 */
@@ -95,7 +125,7 @@ body::before {
     transition: all 0.5s ease-in-out; /* 更慢的过渡 */
     position: relative;
     z-index: 2;
-    flex: 1; /* 使其在body的flex布局中填充剩余空间 */
+    flex: 0 0 1000px; /* 固定宽度，不拉伸 */
 }
 
 .app-container::before {
@@ -1446,10 +1476,4 @@ footer > * {
     box-shadow: 
         0 2px 8px rgba(0, 0, 0, 0.2), /* 点击时阴影 */
         0 0 5px rgba(76, 175, 80, 0.5); /* 点击时发光 */
-}
-
-.redirect-btn.no:active {
-    box-shadow: 
-        0 2px 8px rgba(0, 0, 0, 0.2), /* 点击时阴影 */
-        0 0 5px rgba(244, 67, 54, 0.5); /* 点击时发光 */
 } 
